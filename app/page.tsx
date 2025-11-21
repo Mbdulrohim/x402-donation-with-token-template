@@ -16,6 +16,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useX402Payment } from "@/hooks/use-x402-payment";
+import { useJupiterSwap } from "@/hooks/use-jupiter-swap";
+import {
+  getSolPrice,
+  getUsdcPrice,
+  calculateUsdValue,
+  formatPrice,
+} from "@/lib/price";
 import { Loader2, Send, TrendingUp, Users, Coins } from "lucide-react";
 import { useTheme } from "next-themes";
 import { DonationItem } from "@/components/donation-item";
@@ -57,6 +64,12 @@ export default function Home() {
   const { connected, publicKey, disconnect } = useWallet();
   const walletOverlay = useWalletOverlay();
   const { initiatePayment, isProcessing, error } = useX402Payment();
+  const {
+    getQuote,
+    executeSwap,
+    isLoading: isSwapping,
+    error: swapError,
+  } = useJupiterSwap();
   const [mounted, setMounted] = useState(false);
   const [messages, setMessages] = useState<DonationMessage[]>([]);
   const [stats, setStats] = useState({
@@ -71,6 +84,16 @@ export default function Home() {
   const [donorMessage, setDonorMessage] = useState("");
   const [sortBy, setSortBy] = useState<"recent" | "top">("recent");
   const [donationResult, setDonationResult] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<"donate" | "swap">("donate");
+  const [swapFromAmount, setSwapFromAmount] = useState("100");
+  const [swapToAmount, setSwapToAmount] = useState("100000000");
+  const [swapFromToken, setSwapFromToken] = useState<"SOL" | "USDC">("SOL");
+  const [selectedQuickAmount, setSelectedQuickAmount] = useState<string | null>(
+    null
+  );
+  const [solPrice, setSolPrice] = useState<number>(0);
+  const [usdcPrice, setUsdcPrice] = useState<number>(1);
+  const [swapQuote, setSwapQuote] = useState<any>(null);
 
   // Token config from env
   const tokenName = process.env.NEXT_PUBLIC_TOKEN_NAME || "Token";
@@ -89,7 +112,15 @@ export default function Home() {
   useEffect(() => {
     setMounted(true);
     fetchMessages();
+    fetchPrices();
   }, [sortBy]);
+
+  // Fetch token prices
+  const fetchPrices = async () => {
+    const [sol, usdc] = await Promise.all([getSolPrice(), getUsdcPrice()]);
+    setSolPrice(sol);
+    setUsdcPrice(usdc);
+  };
 
   // Fetch USDC balance when wallet connects
   useEffect(() => {
@@ -180,6 +211,80 @@ export default function Home() {
       console.error("Donation failed:", err);
     }
   };
+
+  const handleSwap = async () => {
+    if (!connected || !swapQuote) return;
+
+    try {
+      const signature = await executeSwap(swapQuote);
+      if (signature) {
+        alert(`Swap successful! Transaction: ${signature}`);
+        setSwapFromAmount("0");
+        setSwapToAmount("0");
+        setSwapQuote(null);
+      }
+    } catch (err) {
+      console.error("Swap failed:", err);
+      alert("Swap failed. Please try again.");
+    }
+  };
+
+  // Fetch Jupiter quote when swap amount changes
+  useEffect(() => {
+    const fetchQuote = async () => {
+      const amount = parseFloat(swapFromAmount);
+      if (!amount || amount <= 0) {
+        setSwapToAmount("0");
+        setSwapQuote(null);
+        return;
+      }
+
+      // Token mint addresses
+      const SOL_MINT = "So11111111111111111111111111111111111111112";
+      const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+      const TOKEN_MINT =
+        process.env.NEXT_PUBLIC_TOKEN_MINT_ADDRESS ||
+        process.env.NEXT_PUBLIC_TOKEN_MINT;
+
+      if (!TOKEN_MINT) {
+        console.warn(
+          "Token mint address not configured - swap functionality disabled"
+        );
+        setSwapToAmount("0");
+        setSwapQuote(null);
+        return;
+      }
+
+      console.log("Fetching quote for:", {
+        amount,
+        fromToken: swapFromToken,
+        toToken: TOKEN_MINT,
+      });
+
+      const inputMint = swapFromToken === "SOL" ? SOL_MINT : USDC_MINT;
+      
+      try {
+        const quote = await getQuote(inputMint, TOKEN_MINT, amount);
+
+        if (quote) {
+          setSwapQuote(quote);
+          // Convert outAmount from smallest unit to token amount
+          const outAmount = parseInt(quote.outAmount) / 1_000_000_000; // Adjust decimals as needed
+          setSwapToAmount(outAmount.toLocaleString());
+        } else {
+          setSwapToAmount("0");
+          setSwapQuote(null);
+        }
+      } catch (error) {
+        console.error("Failed to fetch quote:", error);
+        setSwapToAmount("0");
+        setSwapQuote(null);
+      }
+    };
+
+    const debounce = setTimeout(fetchQuote, 500);
+    return () => clearTimeout(debounce);
+  }, [swapFromAmount, swapFromToken, getQuote]);
 
   const formatAddress = (address: string) => {
     return `${address.slice(0, 4)}...${address.slice(-4)}`;
@@ -519,7 +624,8 @@ export default function Home() {
                 <span
                   style={{
                     fontSize: "14px",
-                    color: theme === "dark" ? "rgba(156, 163, 175, 1)" : "#71717A",
+                    color:
+                      theme === "dark" ? "rgba(156, 163, 175, 1)" : "#71717A",
                   }}
                 >
                   Available USDC:
@@ -536,7 +642,13 @@ export default function Home() {
               </div>
 
               {/* Slider */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "12px",
+                }}
+              >
                 <input
                   type="range"
                   min="0"
@@ -550,12 +662,22 @@ export default function Home() {
                     borderRadius: "8px",
                     appearance: "none",
                     cursor: "pointer",
-                    background: `linear-gradient(to right, #744AC9 0%, #22EBAD ${sliderPercentage}%, ${theme === "dark" ? "rgba(255,255,255,0.16)" : "#E4E4E7"} ${sliderPercentage}%, ${theme === "dark" ? "rgba(255,255,255,0.16)" : "#E4E4E7"} 100%)`,
+                    background: `linear-gradient(to right, #744AC9 0%, #22EBAD ${sliderPercentage}%, ${
+                      theme === "dark" ? "rgba(255,255,255,0.16)" : "#E4E4E7"
+                    } ${sliderPercentage}%, ${
+                      theme === "dark" ? "rgba(255,255,255,0.16)" : "#E4E4E7"
+                    } 100%)`,
                   }}
                 />
-                
+
                 {/* Percentage markers */}
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    fontSize: "12px",
+                  }}
+                >
                   {[0, 25, 50, 75, 100].map((percent) => {
                     const hasMarker = [25, 75, 100].includes(percent);
                     return (
@@ -572,8 +694,12 @@ export default function Home() {
                           cursor: "pointer",
                           color:
                             sliderPercentage === percent
-                              ? theme === "dark" ? "#FFFFFF" : "#09090B"
-                              : theme === "dark" ? "rgba(156, 163, 175, 1)" : "#71717A",
+                              ? theme === "dark"
+                                ? "#FFFFFF"
+                                : "#09090B"
+                              : theme === "dark"
+                              ? "rgba(156, 163, 175, 1)"
+                              : "#71717A",
                           fontWeight: sliderPercentage === percent ? 600 : 400,
                         }}
                       >
@@ -586,7 +712,9 @@ export default function Home() {
                               background:
                                 sliderPercentage === percent
                                   ? "linear-gradient(to right, #744AC9, #22EBAD)"
-                                  : theme === "dark" ? "rgba(255, 255, 255, 0.3)" : "rgba(0, 0, 0, 0.3)",
+                                  : theme === "dark"
+                                  ? "rgba(255, 255, 255, 0.3)"
+                                  : "rgba(0, 0, 0, 0.3)",
                             }}
                           />
                         )}
@@ -602,8 +730,14 @@ export default function Home() {
                     padding: "16px",
                     borderRadius: "8px",
                     textAlign: "center",
-                    background: theme === "dark" ? "rgba(255, 255, 255, 0.06)" : "rgba(0, 0, 0, 0.06)",
-                    border: theme === "dark" ? "1px solid rgba(255, 255, 255, 0.16)" : "1px solid rgba(0, 0, 0, 0.16)",
+                    background:
+                      theme === "dark"
+                        ? "rgba(255, 255, 255, 0.06)"
+                        : "rgba(0, 0, 0, 0.06)",
+                    border:
+                      theme === "dark"
+                        ? "1px solid rgba(255, 255, 255, 0.16)"
+                        : "1px solid rgba(0, 0, 0, 0.16)",
                   }}
                 >
                   <div
@@ -619,7 +753,8 @@ export default function Home() {
                     style={{
                       fontSize: "12px",
                       marginTop: "4px",
-                      color: theme === "dark" ? "rgba(156, 163, 175, 1)" : "#71717A",
+                      color:
+                        theme === "dark" ? "rgba(156, 163, 175, 1)" : "#71717A",
                     }}
                   >
                     {sliderPercentage}% of your USDC balance
@@ -634,8 +769,14 @@ export default function Home() {
                 placeholder="Your Name (Optional)"
                 style={{
                   color: theme === "dark" ? "#FFFFFF" : "#09090B",
-                  background: theme === "dark" ? "rgba(255, 255, 255, 0.06)" : "rgba(0, 0, 0, 0.06)",
-                  border: theme === "dark" ? "1px solid rgba(255, 255, 255, 0.16)" : "1px solid rgba(0, 0, 0, 0.16)",
+                  background:
+                    theme === "dark"
+                      ? "rgba(255, 255, 255, 0.06)"
+                      : "rgba(0, 0, 0, 0.06)",
+                  border:
+                    theme === "dark"
+                      ? "1px solid rgba(255, 255, 255, 0.16)"
+                      : "1px solid rgba(0, 0, 0, 0.16)",
                 }}
               />
 
@@ -647,15 +788,23 @@ export default function Home() {
                 rows={3}
                 style={{
                   color: theme === "dark" ? "#FFFFFF" : "#09090B",
-                  background: theme === "dark" ? "rgba(255, 255, 255, 0.06)" : "rgba(0, 0, 0, 0.06)",
-                  border: theme === "dark" ? "1px solid rgba(255, 255, 255, 0.16)" : "1px solid rgba(0, 0, 0, 0.16)",
+                  background:
+                    theme === "dark"
+                      ? "rgba(255, 255, 255, 0.06)"
+                      : "rgba(0, 0, 0, 0.06)",
+                  border:
+                    theme === "dark"
+                      ? "1px solid rgba(255, 255, 255, 0.16)"
+                      : "1px solid rgba(0, 0, 0, 0.16)",
                 }}
               />
 
               {/* Donate Button */}
               <Button
                 onClick={handleDonate}
-                disabled={isProcessing || !customAmount || parseFloat(customAmount) < 1}
+                disabled={
+                  isProcessing || !customAmount || parseFloat(customAmount) < 1
+                }
                 style={{
                   background: "linear-gradient(to right, #744AC9, #22EBAD)",
                   color: "#FFFFFF",
@@ -665,7 +814,8 @@ export default function Home() {
                   borderRadius: "999px",
                   border: "none",
                   cursor: isProcessing ? "not-allowed" : "pointer",
-                  opacity: isProcessing || parseFloat(customAmount) < 1 ? 0.5 : 1,
+                  opacity:
+                    isProcessing || parseFloat(customAmount) < 1 ? 0.5 : 1,
                 }}
               >
                 {isProcessing ? (
@@ -683,10 +833,15 @@ export default function Home() {
                 style={{
                   fontSize: "12px",
                   textAlign: "center",
-                  color: theme === "dark" ? "rgba(156, 163, 175, 1)" : "#71717A",
+                  color:
+                    theme === "dark" ? "rgba(156, 163, 175, 1)" : "#71717A",
                 }}
               >
-                You will get {(parseFloat(customAmount || "0") * dollarToTokenRatio).toLocaleString()} {tokenSymbol}
+                You will get{" "}
+                {(
+                  parseFloat(customAmount || "0") * dollarToTokenRatio
+                ).toLocaleString()}{" "}
+                {tokenSymbol}
               </p>
             </div>
           ) : (
@@ -695,14 +850,21 @@ export default function Home() {
                 padding: "24px",
                 textAlign: "center",
                 borderRadius: "8px",
-                background: theme === "dark" ? "rgba(255, 255, 255, 0.06)" : "rgba(0, 0, 0, 0.06)",
-                border: theme === "dark" ? "1px solid rgba(255, 255, 255, 0.16)" : "1px solid #E4E4E7",
+                background:
+                  theme === "dark"
+                    ? "rgba(255, 255, 255, 0.06)"
+                    : "rgba(0, 0, 0, 0.06)",
+                border:
+                  theme === "dark"
+                    ? "1px solid rgba(255, 255, 255, 0.16)"
+                    : "1px solid #E4E4E7",
               }}
             >
               <p
                 style={{
                   fontSize: "14px",
-                  color: theme === "dark" ? "rgba(156, 163, 175, 1)" : "#71717A",
+                  color:
+                    theme === "dark" ? "rgba(156, 163, 175, 1)" : "#71717A",
                 }}
               >
                 Connect your wallet to make a donation
@@ -1364,6 +1526,69 @@ export default function Home() {
           </div>
           <div className="flex gap-2"></div>
         </header>
+
+        {/* Tabs */}
+        <div
+          className="border-b"
+          style={{
+            borderColor:
+              theme === "dark"
+                ? "rgba(255, 255, 255, 0.16)"
+                : "rgba(0, 0, 0, 0.16)",
+          }}
+        >
+          <div className="container mx-auto px-4 flex w-full">
+            <button
+              onClick={() => setActiveTab("donate")}
+              className="flex-1 py-3 text-sm font-medium transition-colors relative"
+              style={{
+                color:
+                  activeTab === "donate"
+                    ? theme === "dark"
+                      ? "rgba(255, 255, 255, 1)"
+                      : "rgba(9, 9, 11, 1)"
+                    : theme === "dark"
+                    ? "rgba(156, 163, 175, 1)"
+                    : "rgba(113, 113, 122, 1)",
+              }}
+            >
+              Donate
+              {activeTab === "donate" && (
+                <div
+                  className="absolute bottom-0 left-0 right-0 h-0.5"
+                  style={{
+                    background: "linear-gradient(to right, #744AC9, #22EBAD)",
+                  }}
+                />
+              )}
+            </button>
+            <button
+              onClick={() => setActiveTab("swap")}
+              className="flex-1 py-3 text-sm font-medium transition-colors relative"
+              style={{
+                color:
+                  activeTab === "swap"
+                    ? theme === "dark"
+                      ? "rgba(255, 255, 255, 1)"
+                      : "rgba(9, 9, 11, 1)"
+                    : theme === "dark"
+                    ? "rgba(156, 163, 175, 1)"
+                    : "rgba(113, 113, 122, 1)",
+              }}
+            >
+              Swap
+              {activeTab === "swap" && (
+                <div
+                  className="absolute bottom-0 left-0 right-0 h-0.5"
+                  style={{
+                    background: "linear-gradient(to right, #744AC9, #22EBAD)",
+                  }}
+                />
+              )}
+            </button>
+          </div>
+        </div>
+
         <div
           className="container mx-auto px-4 py-8 space-y-6"
           style={{
@@ -1418,173 +1643,11 @@ export default function Home() {
             </div>
           ) : (
             <>
-              {/* Connected Wallet Section */}
-              <div
-                className="flex items-center justify-between p-4 rounded-lg"
-                style={{
-                  background:
-                    theme === "dark"
-                      ? "rgba(255, 255, 255, 0.06)"
-                      : "rgba(0, 0, 0, 0.06)",
-                  border:
-                    theme === "dark"
-                      ? "1px solid rgba(255, 255, 255, 0.16)"
-                      : "1px solid rgba(0, 0, 0, 0.16)",
-                }}
-              >
-                <div className="flex items-center gap-3">
+              {activeTab === "donate" ? (
+                <>
+                  {/* Connected Wallet Section */}
                   <div
-                    className="w-10 h-10 rounded flex items-center justify-center"
-                    style={{ background: "#744AC9" }}
-                  >
-                    <span
-                      className="text-xl"
-                      style={{
-                        color:
-                          theme === "dark"
-                            ? "rgba(255, 255, 255, 1)"
-                            : "rgba(9, 9, 11, 1)",
-                      }}
-                    >
-                      👤
-                    </span>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-400">Connected Wallet</p>
-                    <p
-                      className="text-sm font-bold"
-                      style={{
-                        color:
-                          theme === "dark"
-                            ? "rgba(255, 255, 255, 1)"
-                            : "rgba(9, 9, 11, 1)",
-                      }}
-                    >
-                      {publicKey ? formatAddress(publicKey.toString()) : ""}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => disconnect()}
-                  className="text-gray-400 text-sm"
-                  style={{
-                    color: "inherit",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color =
-                      theme === "dark"
-                        ? "rgba(255, 255, 255, 1)"
-                        : "rgba(9, 9, 11, 1)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = "";
-                  }}
-                >
-                  Disconnect
-                </button>
-              </div>
-
-              {/* Amount Section */}
-              <div className="space-y-3">
-                <label
-                  className="text-sm font-bold block"
-                  style={{
-                    color:
-                      theme === "dark"
-                        ? "rgba(255, 255, 255, 1)"
-                        : "rgba(9, 9, 11, 1)",
-                  }}
-                >
-                  Amount
-                </label>
-                
-                {/* USDC Balance Display */}
-                <div className="flex items-center justify-between mb-2">
-                  <span
-                    className="text-sm"
-                    style={{
-                      color:
-                        theme === "dark"
-                          ? "rgba(156, 163, 175, 1)"
-                          : "rgba(113, 113, 122, 1)",
-                    }}
-                  >
-                    Available USDC:
-                  </span>
-                  <span
-                    className="text-sm font-bold"
-                    style={{
-                      color:
-                        theme === "dark"
-                          ? "rgba(255, 255, 255, 1)"
-                          : "rgba(9, 9, 11, 1)",
-                    }}
-                  >
-                    ${usdcBalance.toFixed(2)}
-                  </span>
-                </div>
-
-                {/* Slider */}
-                <div className="space-y-4">
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    step="1"
-                    value={sliderPercentage}
-                    onChange={(e) => handleSliderChange(Number(e.target.value))}
-                    className="w-full h-2 rounded-lg appearance-none cursor-pointer"
-                    style={{
-                      background: `linear-gradient(to right, #744AC9 0%, #22EBAD ${sliderPercentage}%, ${theme === "dark" ? "rgba(255,255,255,0.16)" : "#E4E4E7"} ${sliderPercentage}%, ${theme === "dark" ? "rgba(255,255,255,0.16)" : "#E4E4E7"} 100%)`,
-                    }}
-                  />
-                  
-                  {/* Percentage markers */}
-                  <div className="flex justify-between text-xs">
-                    {[0, 25, 50, 75, 100].map((percent) => {
-                      const hasMarker = [25, 75, 100].includes(percent);
-                      return (
-                        <button
-                          key={percent}
-                          onClick={() => handleSliderChange(percent)}
-                          className="transition-all flex flex-col items-center gap-1"
-                          style={{
-                            color:
-                              sliderPercentage === percent
-                                ? theme === "dark"
-                                  ? "#FFFFFF"
-                                  : "#09090B"
-                                : theme === "dark"
-                                ? "rgba(156, 163, 175, 1)"
-                                : "rgba(113, 113, 122, 1)",
-                            fontWeight: sliderPercentage === percent ? 600 : 400,
-                          }}
-                        >
-                          {hasMarker && (
-                            <div
-                              style={{
-                                width: "8px",
-                                height: "8px",
-                                borderRadius: "50%",
-                                background:
-                                  sliderPercentage === percent
-                                    ? "linear-gradient(to right, #744AC9, #22EBAD)"
-                                    : theme === "dark"
-                                    ? "rgba(255, 255, 255, 0.3)"
-                                    : "rgba(0, 0, 0, 0.3)",
-                                marginBottom: "4px",
-                              }}
-                            />
-                          )}
-                          {percent}%
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* Amount display */}
-                  <div
-                    className="text-center p-4 rounded-lg"
+                    className="flex items-center justify-between p-4 rounded-lg"
                     style={{
                       background:
                         theme === "dark"
@@ -1596,8 +1659,61 @@ export default function Home() {
                           : "1px solid rgba(0, 0, 0, 0.16)",
                     }}
                   >
-                    <div
-                      className="text-3xl font-bold"
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="w-10 h-10 rounded flex items-center justify-center"
+                        style={{ background: "#744AC9" }}
+                      >
+                        <span
+                          className="text-xl"
+                          style={{
+                            color:
+                              theme === "dark"
+                                ? "rgba(255, 255, 255, 1)"
+                                : "rgba(9, 9, 11, 1)",
+                          }}
+                        >
+                          👤
+                        </span>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-400">
+                          Connected Wallet
+                        </p>
+                        <p
+                          className="text-sm font-bold"
+                          style={{
+                            color:
+                              theme === "dark"
+                                ? "rgba(255, 255, 255, 1)"
+                                : "rgba(9, 9, 11, 1)",
+                          }}
+                        >
+                          {publicKey ? formatAddress(publicKey.toString()) : ""}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => disconnect()}
+                      className="text-sm"
+                      style={{
+                        color: "#EF4444",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.color = "#DC2626";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.color = "#EF4444";
+                      }}
+                    >
+                      Disconnect
+                    </button>
+                  </div>
+
+                  {/* Amount Section */}
+                  <div className="space-y-3">
+                    <label
+                      className="text-sm font-bold block"
                       style={{
                         color:
                           theme === "dark"
@@ -1605,10 +1721,145 @@ export default function Home() {
                             : "rgba(9, 9, 11, 1)",
                       }}
                     >
-                      ${customAmount}
+                      Amount
+                    </label>
+
+                    {/* USDC Balance Display */}
+                    <div className="flex items-center justify-between mb-2">
+                      <span
+                        className="text-sm"
+                        style={{
+                          color:
+                            theme === "dark"
+                              ? "rgba(156, 163, 175, 1)"
+                              : "rgba(113, 113, 122, 1)",
+                        }}
+                      >
+                        Available USDC:
+                      </span>
+                      <span
+                        className="text-sm font-bold"
+                        style={{
+                          color:
+                            theme === "dark"
+                              ? "rgba(255, 255, 255, 1)"
+                              : "rgba(9, 9, 11, 1)",
+                        }}
+                      >
+                        ${usdcBalance.toFixed(2)}
+                      </span>
                     </div>
-                    <div
-                      className="text-sm mt-1"
+
+                    {/* Slider */}
+                    <div className="space-y-4">
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="1"
+                        value={sliderPercentage}
+                        onChange={(e) =>
+                          handleSliderChange(Number(e.target.value))
+                        }
+                        className="w-full h-2 rounded-lg appearance-none cursor-pointer"
+                        style={{
+                          background: `linear-gradient(to right, #744AC9 0%, #22EBAD ${sliderPercentage}%, ${
+                            theme === "dark"
+                              ? "rgba(255,255,255,0.16)"
+                              : "#E4E4E7"
+                          } ${sliderPercentage}%, ${
+                            theme === "dark"
+                              ? "rgba(255,255,255,0.16)"
+                              : "#E4E4E7"
+                          } 100%)`,
+                        }}
+                      />
+
+                      {/* Percentage markers */}
+                      <div className="flex justify-between text-xs">
+                        {[0, 25, 50, 75, 100].map((percent) => {
+                          const hasMarker = [25, 75, 100].includes(percent);
+                          return (
+                            <button
+                              key={percent}
+                              onClick={() => handleSliderChange(percent)}
+                              className="transition-all flex flex-col items-center gap-1"
+                              style={{
+                                color:
+                                  sliderPercentage === percent
+                                    ? theme === "dark"
+                                      ? "#FFFFFF"
+                                      : "#09090B"
+                                    : theme === "dark"
+                                    ? "rgba(156, 163, 175, 1)"
+                                    : "rgba(113, 113, 122, 1)",
+                                fontWeight:
+                                  sliderPercentage === percent ? 600 : 400,
+                              }}
+                            >
+                              {hasMarker && (
+                                <div
+                                  style={{
+                                    width: "8px",
+                                    height: "8px",
+                                    borderRadius: "50%",
+                                    background:
+                                      sliderPercentage === percent
+                                        ? "linear-gradient(to right, #744AC9, #22EBAD)"
+                                        : theme === "dark"
+                                        ? "rgba(255, 255, 255, 0.3)"
+                                        : "rgba(0, 0, 0, 0.3)",
+                                    marginBottom: "4px",
+                                  }}
+                                />
+                              )}
+                              {percent}%
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Amount display */}
+                      <div
+                        className="text-center p-4 rounded-lg"
+                        style={{
+                          background:
+                            theme === "dark"
+                              ? "rgba(255, 255, 255, 0.06)"
+                              : "rgba(0, 0, 0, 0.06)",
+                          border:
+                            theme === "dark"
+                              ? "1px solid rgba(255, 255, 255, 0.16)"
+                              : "1px solid rgba(0, 0, 0, 0.16)",
+                        }}
+                      >
+                        <div
+                          className="text-3xl font-bold"
+                          style={{
+                            color:
+                              theme === "dark"
+                                ? "rgba(255, 255, 255, 1)"
+                                : "rgba(9, 9, 11, 1)",
+                          }}
+                        >
+                          ${customAmount}
+                        </div>
+                        <div
+                          className="text-sm mt-1"
+                          style={{
+                            color:
+                              theme === "dark"
+                                ? "rgba(156, 163, 175, 1)"
+                                : "rgba(113, 113, 122, 1)",
+                          }}
+                        >
+                          {sliderPercentage}% of your USDC balance
+                        </div>
+                      </div>
+                    </div>
+
+                    <p
+                      className="text-xs"
                       style={{
                         color:
                           theme === "dark"
@@ -1616,130 +1867,553 @@ export default function Home() {
                             : "rgba(113, 113, 122, 1)",
                       }}
                     >
-                      {sliderPercentage}% of your USDC balance
+                      You will get{" "}
+                      {(
+                        parseFloat(customAmount || "0") * dollarToTokenRatio
+                      ).toLocaleString()}{" "}
+                      {tokenSymbol}
+                    </p>
+                  </div>
+
+                  {/* Your Name Section */}
+                  <div className="space-y-2">
+                    <label
+                      className="text-sm font-bold block"
+                      style={{
+                        color:
+                          theme === "dark"
+                            ? "rgba(255, 255, 255, 1)"
+                            : "rgba(9, 9, 11, 1)",
+                      }}
+                    >
+                      Your Name (Optional)
+                    </label>
+                    <Input
+                      value={donorName}
+                      onChange={(e) => setDonorName(e.target.value)}
+                      placeholder="e.g. Bob"
+                      className="bg-transparent border-gray-600"
+                      style={{
+                        color:
+                          theme === "dark"
+                            ? "rgba(255, 255, 255, 1)"
+                            : "rgba(9, 9, 11, 1)",
+                        background:
+                          theme === "dark"
+                            ? "rgba(255, 255, 255, 0.06)"
+                            : "rgba(0, 0, 0, 0.06)",
+                        border:
+                          theme === "dark"
+                            ? "1px solid rgba(255, 255, 255, 0.16)"
+                            : "1px solid rgba(0, 0, 0, 0.16)",
+                      }}
+                    />
+                  </div>
+
+                  {/* Message Section */}
+                  <div className="space-y-2">
+                    <label
+                      className="text-sm font-bold block"
+                      style={{
+                        color:
+                          theme === "dark"
+                            ? "rgba(255, 255, 255, 1)"
+                            : "rgba(9, 9, 11, 1)",
+                      }}
+                    >
+                      Message (Optional)
+                    </label>
+                    <Textarea
+                      value={donorMessage}
+                      onChange={(e) => setDonorMessage(e.target.value)}
+                      placeholder="Ex: I love your project!"
+                      rows={3}
+                      className="bg-transparent border-gray-600"
+                      style={{
+                        color:
+                          theme === "dark"
+                            ? "rgba(255, 255, 255, 1)"
+                            : "rgba(9, 9, 11, 1)",
+                        background:
+                          theme === "dark"
+                            ? "rgba(255, 255, 255, 0.06)"
+                            : "rgba(0, 0, 0, 0.06)",
+                        border:
+                          theme === "dark"
+                            ? "1px solid rgba(255, 255, 255, 0.16)"
+                            : "1px solid rgba(0, 0, 0, 0.16)",
+                      }}
+                    />
+                  </div>
+
+                  {/* Donate Button */}
+                  <Button
+                    onClick={handleDonate}
+                    disabled={
+                      isProcessing ||
+                      !customAmount ||
+                      parseFloat(customAmount) < 1
+                    }
+                    className="w-full font-bold py-3 rounded-full"
+                    style={{
+                      color:
+                        theme === "dark"
+                          ? "rgba(255, 255, 255, 1)"
+                          : "rgba(9, 9, 11, 1)",
+                      background: "linear-gradient(to right, #744AC9, #22EBAD)",
+                      border: "none",
+                    }}
+                  >
+                    {isProcessing ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      `Donate $${customAmount || "0"}`
+                    )}
+                  </Button>
+
+                  {/* Secure Payment Footer */}
+                  <div className="flex items-center justify-center gap-2 text-xs text-gray-400">
+                    <span className="text-green-500">✓</span>
+                    <span>Secure payment powered by Solana</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Swap Tab Content */}
+                  <div className="space-y-4">
+                    {/* You're paying Section */}
+                    <div className="flex flex-col gap-3">
+                      <label
+                        className="text-sm font-medium"
+                        style={{
+                          color:
+                            theme === "dark"
+                              ? "rgba(255, 255, 255, 1)"
+                              : "rgba(9, 9, 11, 1)",
+                        }}
+                      >
+                        You're paying
+                      </label>
+
+                      <div
+                        className="flex flex-row items-center p-4 gap-2 rounded-lg"
+                        style={{
+                          background:
+                            theme === "dark"
+                              ? "rgba(255, 255, 255, 0.06)"
+                              : "rgba(250, 250, 250, 1)",
+                          border:
+                            theme === "dark"
+                              ? "1px solid rgba(255, 255, 255, 0.16)"
+                              : "1px solid #E4E4E7",
+                          height: "68px",
+                        }}
+                      >
+                        {/* Token selector card */}
+                        <div
+                          className="flex flex-row items-center p-2 gap-1 rounded-lg"
+                          style={{
+                            background:
+                              theme === "dark"
+                                ? "rgba(255, 255, 255, 0.1)"
+                                : "#FFFFFF",
+                            border:
+                              theme === "dark"
+                                ? "1px solid rgba(255, 255, 255, 0.16)"
+                                : "1px solid #E4E4E7",
+                            height: "40px",
+                            minWidth: "96px",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: "24px",
+                              height: "24px",
+                              borderRadius: "50%",
+                              background:
+                                swapFromToken === "SOL" ? "#14F195" : "#2775CA",
+                            }}
+                          />
+                          <select
+                            value={swapFromToken}
+                            onChange={(e) =>
+                              setSwapFromToken(e.target.value as "SOL" | "USDC")
+                            }
+                            className="bg-transparent text-sm font-medium outline-none"
+                            style={{
+                              color:
+                                theme === "dark"
+                                  ? "rgba(255, 255, 255, 1)"
+                                  : "rgba(9, 9, 11, 1)",
+                            }}
+                          >
+                            <option value="SOL">SOL</option>
+                            <option value="USDC">USDC</option>
+                          </select>
+                          <svg
+                            width="20"
+                            height="20"
+                            viewBox="0 0 20 20"
+                            fill="none"
+                            style={{ marginLeft: "auto" }}
+                          >
+                            <path
+                              d="M5 7.5L10 12.5L15 7.5"
+                              stroke={theme === "dark" ? "#71717A" : "#3F3F46"}
+                              strokeWidth="1.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        </div>
+
+                        {/* Amount input */}
+                        <div className="flex flex-col justify-center items-end gap-0.5 flex-grow">
+                          <input
+                            type="number"
+                            value={swapFromAmount}
+                            onChange={(e) => setSwapFromAmount(e.target.value)}
+                            className="bg-transparent text-right text-sm font-medium outline-none w-full"
+                            style={{
+                              color:
+                                theme === "dark"
+                                  ? "rgba(255, 255, 255, 1)"
+                                  : "rgba(9, 9, 11, 1)",
+                            }}
+                          />
+                          <span
+                            className="text-xs"
+                            style={{
+                              color:
+                                theme === "dark"
+                                  ? "rgba(156, 163, 175, 1)"
+                                  : "rgba(113, 113, 122, 1)",
+                            }}
+                          >
+                            {formatPrice(
+                              calculateUsdValue(
+                                parseFloat(swapFromAmount) || 0,
+                                swapFromToken === "SOL" ? solPrice : usdcPrice
+                              )
+                            )}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Quick Amount Buttons */}
+                      <div className="flex flex-row gap-2">
+                        {["$1", "$5", "$10", "$50", "$100"].map((amount) => (
+                          <button
+                            key={amount}
+                            onClick={() => {
+                              const value = amount.replace("$", "");
+                              setSwapFromAmount(value);
+                              setSelectedQuickAmount(amount);
+                            }}
+                            className="flex flex-col justify-center items-center py-1.5 px-4 rounded-lg text-sm font-medium transition-colors flex-1"
+                            style={{
+                              background:
+                                theme === "dark" ? "transparent" : "#FFFFFF",
+                              border:
+                                selectedQuickAmount === amount
+                                  ? "1px solid transparent"
+                                  : theme === "dark"
+                                  ? "1px solid rgba(255, 255, 255, 0.16)"
+                                  : "1px solid #E4E4E7",
+                              backgroundImage:
+                                selectedQuickAmount === amount
+                                  ? `linear-gradient(${
+                                      theme === "dark"
+                                        ? "transparent"
+                                        : "#FFFFFF"
+                                    }, ${
+                                      theme === "dark"
+                                        ? "transparent"
+                                        : "#FFFFFF"
+                                    }), linear-gradient(to right, #744AC9, #22EBAD)`
+                                  : "none",
+                              backgroundOrigin: "border-box",
+                              backgroundClip:
+                                selectedQuickAmount === amount
+                                  ? "padding-box, border-box"
+                                  : "padding-box",
+                              color:
+                                theme === "dark"
+                                  ? "rgba(255, 255, 255, 1)"
+                                  : "rgba(9, 9, 11, 1)",
+                              height: "32px",
+                            }}
+                          >
+                            {amount}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Swap Direction Indicator */}
+                    <div className="flex flex-row justify-center items-center gap-2 h-11">
+                      <div
+                        style={{
+                          width: "141.5px",
+                          height: "0px",
+                          border:
+                            theme === "dark"
+                              ? "1px solid rgba(255, 255, 255, 0.16)"
+                              : "1px solid #E4E4E7",
+                        }}
+                      />
+                      <div
+                        className="flex justify-center items-center rounded-full"
+                        style={{
+                          width: "44px",
+                          height: "44px",
+                          border:
+                            theme === "dark"
+                              ? "1px solid rgba(255, 255, 255, 0.16)"
+                              : "1px solid #E4E4E7",
+                        }}
+                      >
+                        <svg
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                        >
+                          <path
+                            d="M7 10L12 15L17 10"
+                            stroke={theme === "dark" ? "#FFFFFF" : "#09090B"}
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </div>
+                      <div
+                        style={{
+                          width: "141.5px",
+                          height: "0px",
+                          border:
+                            theme === "dark"
+                              ? "1px solid rgba(255, 255, 255, 0.16)"
+                              : "1px solid #E4E4E7",
+                        }}
+                      />
+                    </div>
+
+                    {/* To receive Section */}
+                    <div className="flex flex-col gap-3">
+                      <label
+                        className="text-sm font-medium"
+                        style={{
+                          color:
+                            theme === "dark"
+                              ? "rgba(255, 255, 255, 1)"
+                              : "rgba(9, 9, 11, 1)",
+                        }}
+                      >
+                        To receive
+                      </label>
+
+                      <div
+                        className="flex flex-row items-center p-4 gap-2 rounded-lg"
+                        style={{
+                          background:
+                            theme === "dark"
+                              ? "rgba(255, 255, 255, 0.06)"
+                              : "rgba(250, 250, 250, 1)",
+                          border:
+                            theme === "dark"
+                              ? "1px solid rgba(255, 255, 255, 0.16)"
+                              : "1px solid #E4E4E7",
+                          height: "68px",
+                        }}
+                      >
+                        {/* Token display card */}
+                        <div
+                          className="flex flex-row items-center p-2 gap-1 rounded-lg"
+                          style={{
+                            background:
+                              theme === "dark"
+                                ? "rgba(255, 255, 255, 0.1)"
+                                : "#FFFFFF",
+                            border:
+                              theme === "dark"
+                                ? "1px solid rgba(255, 255, 255, 0.16)"
+                                : "1px solid #E4E4E7",
+                            height: "40px",
+                            minWidth: "84px",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: "24px",
+                              height: "24px",
+                              borderRadius: "50%",
+                              background:
+                                "linear-gradient(to right, #744AC9, #22EBAD)",
+                            }}
+                          />
+                          <span
+                            className="text-sm font-medium"
+                            style={{
+                              color:
+                                theme === "dark"
+                                  ? "rgba(255, 255, 255, 1)"
+                                  : "rgba(9, 9, 11, 1)",
+                            }}
+                          >
+                            {tokenSymbol}
+                          </span>
+                        </div>
+
+                        {/* Amount display */}
+                        <div className="flex flex-col justify-center items-end gap-0.5 flex-grow">
+                          <span
+                            className="text-sm font-medium text-right"
+                            style={{
+                              color:
+                                theme === "dark"
+                                  ? "rgba(255, 255, 255, 1)"
+                                  : "rgba(9, 9, 11, 1)",
+                            }}
+                          >
+                            {swapToAmount}
+                          </span>
+                          <span
+                            className="text-xs"
+                            style={{
+                              color:
+                                theme === "dark"
+                                  ? "rgba(156, 163, 175, 1)"
+                                  : "rgba(113, 113, 122, 1)",
+                            }}
+                          >
+                            {swapQuote
+                              ? formatPrice(
+                                  calculateUsdValue(
+                                    parseFloat(swapFromAmount) || 0,
+                                    swapFromToken === "SOL"
+                                      ? solPrice
+                                      : usdcPrice
+                                  )
+                                )
+                              : "$0.00"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Rate and Fee Info */}
+                    <div
+                      className="p-4 rounded-lg space-y-2"
+                      style={{
+                        background:
+                          theme === "dark"
+                            ? "rgba(255, 255, 255, 0.06)"
+                            : "rgba(0, 0, 0, 0.06)",
+                        border:
+                          theme === "dark"
+                            ? "1px solid rgba(255, 255, 255, 0.16)"
+                            : "1px solid rgba(0, 0, 0, 0.16)",
+                      }}
+                    >
+                      <div className="flex items-center justify-between text-sm">
+                        <span
+                          style={{
+                            color:
+                              theme === "dark"
+                                ? "rgba(156, 163, 175, 1)"
+                                : "rgba(113, 113, 122, 1)",
+                          }}
+                        >
+                          Rate
+                        </span>
+                        <span
+                          className="font-medium"
+                          style={{
+                            color:
+                              theme === "dark"
+                                ? "rgba(255, 255, 255, 1)"
+                                : "rgba(9, 9, 11, 1)",
+                          }}
+                        >
+                          1 SOL ≈ 1,000,000 {tokenSymbol}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span
+                          style={{
+                            color:
+                              theme === "dark"
+                                ? "rgba(156, 163, 175, 1)"
+                                : "rgba(113, 113, 122, 1)",
+                          }}
+                        >
+                          Service fee
+                        </span>
+                        <span
+                          className="font-medium"
+                          style={{
+                            color:
+                              theme === "dark"
+                                ? "rgba(255, 255, 255, 1)"
+                                : "rgba(9, 9, 11, 1)",
+                          }}
+                        >
+                          0.5%
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Swap Button */}
+                    <Button
+                      onClick={handleSwap}
+                      disabled={
+                        isSwapping ||
+                        !swapQuote ||
+                        !swapFromAmount ||
+                        parseFloat(swapFromAmount) <= 0
+                      }
+                      className="w-full font-bold py-3 rounded-full"
+                      style={{
+                        color:
+                          theme === "dark"
+                            ? "rgba(255, 255, 255, 1)"
+                            : "rgba(9, 9, 11, 1)",
+                        background:
+                          "linear-gradient(to right, #744AC9, #22EBAD)",
+                        border: "none",
+                      }}
+                    >
+                      {isSwapping ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Swapping...
+                        </>
+                      ) : (
+                        `Swap ${
+                          swapFromAmount || "0"
+                        } ${swapFromToken} for ${tokenSymbol}`
+                      )}
+                    </Button>
+
+                    {swapError && (
+                      <div className="text-sm text-red-500 text-center">
+                        {swapError}
+                      </div>
+                    )}
+
+                    {/* Secure Payment Footer */}
+                    <div className="flex items-center justify-center gap-2 text-xs text-gray-400">
+                      <span className="text-green-500">✓</span>
+                      <span>Secure payment powered by Solana</span>
                     </div>
                   </div>
-                </div>
-
-                <p
-                  className="text-xs"
-                  style={{
-                    color:
-                      theme === "dark"
-                        ? "rgba(156, 163, 175, 1)"
-                        : "rgba(113, 113, 122, 1)",
-                  }}
-                >
-                  You will get{" "}
-                  {(
-                    parseFloat(customAmount || "0") * dollarToTokenRatio
-                  ).toLocaleString()}{" "}
-                  {tokenSymbol}
-                </p>
-              </div>
-
-              {/* Your Name Section */}
-              <div className="space-y-2">
-                <label
-                  className="text-sm font-bold block"
-                  style={{
-                    color:
-                      theme === "dark"
-                        ? "rgba(255, 255, 255, 1)"
-                        : "rgba(9, 9, 11, 1)",
-                  }}
-                >
-                  Your Name (Optional)
-                </label>
-                <Input
-                  value={donorName}
-                  onChange={(e) => setDonorName(e.target.value)}
-                  placeholder="e.g. Bob"
-                  className="bg-transparent border-gray-600"
-                  style={{
-                    color:
-                      theme === "dark"
-                        ? "rgba(255, 255, 255, 1)"
-                        : "rgba(9, 9, 11, 1)",
-                    background:
-                      theme === "dark"
-                        ? "rgba(255, 255, 255, 0.06)"
-                        : "rgba(0, 0, 0, 0.06)",
-                    border:
-                      theme === "dark"
-                        ? "1px solid rgba(255, 255, 255, 0.16)"
-                        : "1px solid rgba(0, 0, 0, 0.16)",
-                  }}
-                />
-              </div>
-
-              {/* Message Section */}
-              <div className="space-y-2">
-                <label
-                  className="text-sm font-bold block"
-                  style={{
-                    color:
-                      theme === "dark"
-                        ? "rgba(255, 255, 255, 1)"
-                        : "rgba(9, 9, 11, 1)",
-                  }}
-                >
-                  Message (Optional)
-                </label>
-                <Textarea
-                  value={donorMessage}
-                  onChange={(e) => setDonorMessage(e.target.value)}
-                  placeholder="Ex: I love your project!"
-                  rows={3}
-                  className="bg-transparent border-gray-600"
-                  style={{
-                    color:
-                      theme === "dark"
-                        ? "rgba(255, 255, 255, 1)"
-                        : "rgba(9, 9, 11, 1)",
-                    background:
-                      theme === "dark"
-                        ? "rgba(255, 255, 255, 0.06)"
-                        : "rgba(0, 0, 0, 0.06)",
-                    border:
-                      theme === "dark"
-                        ? "1px solid rgba(255, 255, 255, 0.16)"
-                        : "1px solid rgba(0, 0, 0, 0.16)",
-                  }}
-                />
-              </div>
-
-              {/* Donate Button */}
-              <Button
-                onClick={handleDonate}
-                disabled={
-                  isProcessing || !customAmount || parseFloat(customAmount) < 1
-                }
-                className="w-full font-bold py-3 rounded-full"
-                style={{
-                  color:
-                    theme === "dark"
-                      ? "rgba(255, 255, 255, 1)"
-                      : "rgba(9, 9, 11, 1)",
-                  background: "linear-gradient(to right, #744AC9, #22EBAD)",
-                  border: "none",
-                }}
-              >
-                {isProcessing ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Processing...
-                  </>
-                ) : (
-                  `Donate $${customAmount || "0"}`
-                )}
-              </Button>
-
-              {/* Secure Payment Footer */}
-              <div className="flex items-center justify-center gap-2 text-xs text-gray-400">
-                <span className="text-green-500">✓</span>
-                <span>Secure payment powered by Solana</span>
-              </div>
+                </>
+              )}
             </>
           )}
         </div>
