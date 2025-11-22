@@ -1,5 +1,5 @@
 {
-  "buildCommand": "pnpm drizzle-kit generate && pnpm build",
+  "buildCommand": "pnpm build",
   "devCommand": "pnpm dev",
   "installCommand": "pnpm install",
   "framework": "nextjs",
