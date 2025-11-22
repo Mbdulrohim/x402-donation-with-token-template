@@ -12,7 +12,7 @@ export interface DonationMessage {
     donor_address: string;
     donor_name: string | null;
     amount_usd: number;
-    tokens_minted: number;
+    tokens_amount: number;
     message: string | null;
     created_at: Date;
 }
@@ -23,7 +23,7 @@ export interface DonationMessage {
 export async function storeDonation(
     donatorAddress: string,
     amountUsd: number,
-    tokensMinted: number,
+    tokensAmount: number,
     name?: string,
     message?: string,
     transactionSignature?: string
@@ -33,7 +33,7 @@ export async function storeDonation(
             donorAddress: donatorAddress,
             donorName: name || null,
             amountUsd: amountUsd.toString(),
-            tokensMinted,
+            tokensAmount,
             message: message || null,
             transactionSignature: transactionSignature || null,
         }).returning();
@@ -45,7 +45,7 @@ export async function storeDonation(
             donor_address: donation.donorAddress,
             donor_name: donation.donorName,
             amount_usd: parseFloat(donation.amountUsd),
-            tokens_minted: donation.tokensMinted,
+            tokens_amount: donation.tokensAmount,
             message: donation.message,
             created_at: donation.createdAt,
         };
@@ -91,7 +91,7 @@ export async function getDonations(
             donor_address: d.donorAddress,
             donor_name: d.donorName,
             amount_usd: parseFloat(d.amountUsd),
-            tokens_minted: d.tokensMinted,
+            tokens_amount: d.tokensAmount,
             message: d.message,
             created_at: d.createdAt,
         }));
@@ -119,7 +119,7 @@ export async function getDonationStats(): Promise<{
             .select({
                 totalDonations: count(),
                 totalAmount: sql<string>`COALESCE(SUM(${donations.amountUsd}), 0)`,
-                totalTokens: sql<number>`COALESCE(SUM(${donations.tokensMinted}), 0)`,
+                totalTokens: sql<number>`COALESCE(SUM(${donations.tokensAmount}), 0)`,
             })
             .from(donations);
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useWallet } from "@solana/wallet-adapter-react";
+import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { useWalletOverlay } from "@/components/wallet-overlay-provider";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,7 +16,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useX402Payment } from "@/hooks/use-x402-payment";
-import { useJupiterSwap } from "@/hooks/use-jupiter-swap";
 import {
   getSolPrice,
   getUsdcPrice,
@@ -24,6 +23,8 @@ import {
   formatPrice,
 } from "@/lib/price";
 import { Loader2, Send, TrendingUp, Users, Coins } from "lucide-react";
+import { PublicKey } from "@solana/web3.js";
+import type { ParsedAccountData } from "@solana/web3.js";
 import { useTheme } from "next-themes";
 import { DonationItem } from "@/components/donation-item";
 import { DonationSuccess } from "@/components/donation-success";
@@ -33,7 +34,7 @@ interface DonationMessage {
   donor_address: string;
   donor_name: string | null;
   amount_usd: number;
-  tokens_minted: number;
+  tokens_amount: number;
   message: string | null;
   created_at: string;
 }
@@ -62,14 +63,9 @@ export default function Home() {
   const theme = (resolvedTheme as "dark" | "light" | undefined) || "light";
 
   const { connected, publicKey, disconnect } = useWallet();
+  const { connection } = useConnection();
   const walletOverlay = useWalletOverlay();
   const { initiatePayment, isProcessing, error } = useX402Payment();
-  const {
-    getQuote,
-    executeSwap,
-    isLoading: isSwapping,
-    error: swapError,
-  } = useJupiterSwap();
   const [mounted, setMounted] = useState(false);
   const [messages, setMessages] = useState<DonationMessage[]>([]);
   const [stats, setStats] = useState({
@@ -78,22 +74,23 @@ export default function Home() {
     totalTokens: 0,
   });
   const [usdcBalance, setUsdcBalance] = useState<number>(0);
+  const [tokenBalance, setTokenBalance] = useState<number>(0);
   const [sliderPercentage, setSliderPercentage] = useState<number>(10);
   const [customAmount, setCustomAmount] = useState("0");
   const [donorName, setDonorName] = useState("");
   const [donorMessage, setDonorMessage] = useState("");
   const [sortBy, setSortBy] = useState<"recent" | "top">("recent");
   const [donationResult, setDonationResult] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<"donate" | "swap">("donate");
-  const [swapFromAmount, setSwapFromAmount] = useState("100");
-  const [swapToAmount, setSwapToAmount] = useState("100000000");
-  const [swapFromToken, setSwapFromToken] = useState<"SOL" | "USDC">("SOL");
+  const [activeTab, setActiveTab] = useState<"donate" | "mint">("donate");
+  const [mintAmount, setMintAmount] = useState("1");
   const [selectedQuickAmount, setSelectedQuickAmount] = useState<string | null>(
     null
   );
+  const [donateWithToken, setDonateWithToken] = useState<"TOKEN" | "USDC">(
+    "TOKEN"
+  );
   const [solPrice, setSolPrice] = useState<number>(0);
   const [usdcPrice, setUsdcPrice] = useState<number>(1);
-  const [swapQuote, setSwapQuote] = useState<any>(null);
 
   // Token config from env
   const tokenName = process.env.NEXT_PUBLIC_TOKEN_NAME || "Token";
@@ -108,6 +105,26 @@ export default function Home() {
     process.env.NEXT_PUBLIC_DONATION_TARGET || "1000"
   );
   const dollarToTokenRatio = Math.floor(mintableSupply / donationTarget);
+
+  const isTokenDonation = donateWithToken === "TOKEN";
+  const donationBalance = isTokenDonation ? tokenBalance : usdcBalance;
+  const formattedDonationBalance = isTokenDonation
+    ? `${donationBalance.toLocaleString(undefined, {
+        maximumFractionDigits: 2,
+      })} ${tokenSymbol}`
+    : `$${donationBalance.toFixed(2)}`;
+  const donationAmountLabel = isTokenDonation
+    ? `${customAmount || "0"} ${tokenSymbol}`
+    : `$${customAmount || "0"}`;
+  const sliderBalanceLabel = isTokenDonation
+    ? `${tokenSymbol} balance`
+    : "USDC balance";
+  const parsedDonationAmount = parseFloat(customAmount || "0") || 0;
+  const minimumDonationAmount = isTokenDonation ? 1 : 1;
+  const isDonateDisabled =
+    isProcessing ||
+    !customAmount ||
+    parsedDonationAmount < minimumDonationAmount;
 
   useEffect(() => {
     setMounted(true);
@@ -163,6 +180,59 @@ export default function Home() {
     fetchUsdcBalance();
   }, [connected, publicKey]);
 
+  // Fetch token balance when wallet connects
+  useEffect(() => {
+    const fetchTokenBalance = async () => {
+      if (!connected || !publicKey) {
+        setTokenBalance(0);
+        return;
+      }
+
+      const tokenMintAddress =
+        process.env.NEXT_PUBLIC_TOKEN_MINT_ADDRESS ||
+        process.env.NEXT_PUBLIC_TOKEN_MINT;
+
+      if (!tokenMintAddress) {
+        setTokenBalance(0);
+        return;
+      }
+
+      try {
+        const tokenMint = new PublicKey(tokenMintAddress);
+        const parsedTokenAccounts =
+          await connection.getParsedTokenAccountsByOwner(publicKey, {
+            mint: tokenMint,
+          });
+
+        if (!parsedTokenAccounts.value.length) {
+          setTokenBalance(0);
+          return;
+        }
+
+        const accountData = parsedTokenAccounts.value[0].account
+          .data as ParsedAccountData;
+        const tokenAmountInfo = (accountData?.parsed as any)?.info?.tokenAmount;
+
+        if (!tokenAmountInfo) {
+          setTokenBalance(0);
+          return;
+        }
+
+        const balance =
+          tokenAmountInfo.uiAmount ??
+          Number(tokenAmountInfo.amount) /
+            Math.pow(10, tokenAmountInfo.decimals);
+
+        setTokenBalance(balance || 0);
+      } catch (error) {
+        console.error("Failed to fetch token balance:", error);
+        setTokenBalance(0);
+      }
+    };
+
+    fetchTokenBalance();
+  }, [connected, publicKey, connection]);
+
   const fetchMessages = async () => {
     try {
       const response = await fetch(`/api/messages?sort=${sortBy}&limit=20`);
@@ -178,9 +248,15 @@ export default function Home() {
 
   // Calculate amount based on slider percentage
   useEffect(() => {
-    const calculatedAmount = (usdcBalance * sliderPercentage) / 100;
-    setCustomAmount(calculatedAmount.toFixed(2));
-  }, [sliderPercentage, usdcBalance]);
+    const balance = donateWithToken === "USDC" ? usdcBalance : tokenBalance;
+    const calculatedAmount = (balance * sliderPercentage) / 100;
+
+    if (donateWithToken === "USDC") {
+      setCustomAmount(calculatedAmount.toFixed(2));
+    } else {
+      setCustomAmount(Math.max(0, Math.floor(calculatedAmount)).toString());
+    }
+  }, [sliderPercentage, usdcBalance, tokenBalance, donateWithToken]);
 
   const handleSliderChange = (percentage: number) => {
     setSliderPercentage(percentage);
@@ -191,7 +267,7 @@ export default function Home() {
 
     const amount = parseFloat(customAmount);
     if (amount < 1) {
-      alert("Minimum donation is $1");
+      alert("Minimum donation is 1 TOKEN");
       return;
     }
 
@@ -212,79 +288,34 @@ export default function Home() {
     }
   };
 
-  const handleSwap = async () => {
-    if (!connected || !swapQuote) return;
+  const handleMint = async () => {
+    if (!connected || !mintAmount) return;
+
+    const amount = parseFloat(mintAmount);
+    if (amount < 1) {
+      alert("Minimum mint is $1");
+      return;
+    }
 
     try {
-      const signature = await executeSwap(swapQuote);
-      if (signature) {
-        alert(`Swap successful! Transaction: ${signature}`);
-        setSwapFromAmount("0");
-        setSwapToAmount("0");
-        setSwapQuote(null);
+      const result = await initiatePayment("/api/mint", {
+        amount,
+      });
+      if (result) {
+        const mintData = result as any;
+        alert(
+          `Mint successful! You received ${
+            mintData.data?.tokensMinted || 0
+          } ${tokenSymbol}`
+        );
+        setMintAmount("1");
+        setSelectedQuickAmount(null);
       }
     } catch (err) {
-      console.error("Swap failed:", err);
-      alert("Swap failed. Please try again.");
+      console.error("Mint failed:", err);
+      alert("Mint failed. Please try again.");
     }
   };
-
-  // Fetch Jupiter quote when swap amount changes
-  useEffect(() => {
-    const fetchQuote = async () => {
-      const amount = parseFloat(swapFromAmount);
-      if (!amount || amount <= 0) {
-        setSwapToAmount("0");
-        setSwapQuote(null);
-        return;
-      }
-
-      // Token mint addresses
-      const SOL_MINT = "So11111111111111111111111111111111111111112";
-      const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
-      const TOKEN_MINT =
-        process.env.NEXT_PUBLIC_TOKEN_MINT_ADDRESS ||
-        process.env.NEXT_PUBLIC_TOKEN_MINT;
-
-      if (!TOKEN_MINT) {
-        console.warn(
-          "Token mint address not configured - swap functionality disabled"
-        );
-        setSwapToAmount("0");
-        setSwapQuote(null);
-        return;
-      }
-
-      console.log("Fetching quote for:", {
-        amount,
-        fromToken: swapFromToken,
-        toToken: TOKEN_MINT,
-      });
-
-      const inputMint = swapFromToken === "SOL" ? SOL_MINT : USDC_MINT;
-      
-      try {
-        const quote = await getQuote(inputMint, TOKEN_MINT, amount);
-
-        if (quote) {
-          setSwapQuote(quote);
-          // Convert outAmount from smallest unit to token amount
-          const outAmount = parseInt(quote.outAmount) / 1_000_000_000; // Adjust decimals as needed
-          setSwapToAmount(outAmount.toLocaleString());
-        } else {
-          setSwapToAmount("0");
-          setSwapQuote(null);
-        }
-      } catch (error) {
-        console.error("Failed to fetch quote:", error);
-        setSwapToAmount("0");
-        setSwapQuote(null);
-      }
-    };
-
-    const debounce = setTimeout(fetchQuote, 500);
-    return () => clearTimeout(debounce);
-  }, [swapFromAmount, swapFromToken, getQuote]);
 
   const formatAddress = (address: string) => {
     return `${address.slice(0, 4)}...${address.slice(-4)}`;
@@ -628,7 +659,7 @@ export default function Home() {
                       theme === "dark" ? "rgba(156, 163, 175, 1)" : "#71717A",
                   }}
                 >
-                  Available USDC:
+                  Available {isTokenDonation ? tokenSymbol : "USDC"}:
                 </span>
                 <span
                   style={{
@@ -637,7 +668,7 @@ export default function Home() {
                     color: theme === "dark" ? "#FFFFFF" : "#09090B",
                   }}
                 >
-                  ${usdcBalance.toFixed(2)}
+                  {formattedDonationBalance}
                 </span>
               </div>
 
@@ -747,7 +778,7 @@ export default function Home() {
                       color: theme === "dark" ? "#FFFFFF" : "#09090B",
                     }}
                   >
-                    ${customAmount}
+                    {donationAmountLabel}
                   </div>
                   <div
                     style={{
@@ -757,7 +788,7 @@ export default function Home() {
                         theme === "dark" ? "rgba(156, 163, 175, 1)" : "#71717A",
                     }}
                   >
-                    {sliderPercentage}% of your USDC balance
+                    {sliderPercentage}% of your {sliderBalanceLabel}
                   </div>
                 </div>
               </div>
@@ -802,9 +833,7 @@ export default function Home() {
               {/* Donate Button */}
               <Button
                 onClick={handleDonate}
-                disabled={
-                  isProcessing || !customAmount || parseFloat(customAmount) < 1
-                }
+                disabled={isDonateDisabled}
                 style={{
                   background: "linear-gradient(to right, #744AC9, #22EBAD)",
                   color: "#FFFFFF",
@@ -813,9 +842,8 @@ export default function Home() {
                   padding: "12px 24px",
                   borderRadius: "999px",
                   border: "none",
-                  cursor: isProcessing ? "not-allowed" : "pointer",
-                  opacity:
-                    isProcessing || parseFloat(customAmount) < 1 ? 0.5 : 1,
+                  cursor: isDonateDisabled ? "not-allowed" : "pointer",
+                  opacity: isDonateDisabled ? 0.5 : 1,
                 }}
               >
                 {isProcessing ? (
@@ -823,6 +851,8 @@ export default function Home() {
                     <Loader2 className="mr-2 h-4 w-4 animate-spin inline" />
                     Processing...
                   </>
+                ) : isTokenDonation ? (
+                  `Donate ${customAmount || "0"} ${tokenSymbol}`
                 ) : (
                   `Donate $${customAmount || "0"}`
                 )}
@@ -837,11 +867,19 @@ export default function Home() {
                     theme === "dark" ? "rgba(156, 163, 175, 1)" : "#71717A",
                 }}
               >
-                You will get{" "}
-                {(
-                  parseFloat(customAmount || "0") * dollarToTokenRatio
-                ).toLocaleString()}{" "}
-                {tokenSymbol}
+                {isTokenDonation ? (
+                  <>
+                    You are donating {customAmount || "0"} {tokenSymbol}
+                  </>
+                ) : (
+                  <>
+                    You will get{" "}
+                    {(
+                      parseFloat(customAmount || "0") * dollarToTokenRatio
+                    ).toLocaleString()}{" "}
+                    {tokenSymbol}
+                  </>
+                )}
               </p>
             </div>
           ) : (
@@ -1063,7 +1101,7 @@ export default function Home() {
                       donor_address={msg.donor_address}
                       donor_name={msg.donor_name}
                       amount_usd={msg.amount_usd}
-                      tokens_minted={msg.tokens_minted}
+                      tokens_amount={msg.tokens_amount}
                       message={msg.message}
                       created_at={msg.created_at}
                       tokenSymbol={tokenSymbol}
@@ -1463,7 +1501,7 @@ export default function Home() {
                     donor_address={msg.donor_address}
                     donor_name={msg.donor_name}
                     amount_usd={msg.amount_usd}
-                    tokens_minted={msg.tokens_minted}
+                    tokens_amount={msg.tokens_amount}
                     message={msg.message}
                     created_at={msg.created_at}
                     tokenSymbol={tokenSymbol}
@@ -1563,11 +1601,11 @@ export default function Home() {
               )}
             </button>
             <button
-              onClick={() => setActiveTab("swap")}
+              onClick={() => setActiveTab("mint")}
               className="flex-1 py-3 text-sm font-medium transition-colors relative"
               style={{
                 color:
-                  activeTab === "swap"
+                  activeTab === "mint"
                     ? theme === "dark"
                       ? "rgba(255, 255, 255, 1)"
                       : "rgba(9, 9, 11, 1)"
@@ -1576,8 +1614,8 @@ export default function Home() {
                     : "rgba(113, 113, 122, 1)",
               }}
             >
-              Swap
-              {activeTab === "swap" && (
+              Mint
+              {activeTab === "mint" && (
                 <div
                   className="absolute bottom-0 left-0 right-0 h-0.5"
                   style={{
@@ -1724,7 +1762,45 @@ export default function Home() {
                       Amount
                     </label>
 
-                    {/* USDC Balance Display */}
+                    {/* Donate With Token Selector */}
+                    <div className="flex gap-2 mb-3">
+                      {[
+                        { value: "TOKEN", label: tokenSymbol },
+                        { value: "USDC", label: "USDC" },
+                      ].map((token) => (
+                        <button
+                          key={token.value}
+                          onClick={() =>
+                            setDonateWithToken(token.value as "TOKEN" | "USDC")
+                          }
+                          className="flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors"
+                          style={{
+                            background:
+                              donateWithToken === token.value
+                                ? "linear-gradient(to right, #744AC9, #22EBAD)"
+                                : theme === "dark"
+                                ? "rgba(255, 255, 255, 0.06)"
+                                : "rgba(0, 0, 0, 0.06)",
+                            border:
+                              donateWithToken === token.value
+                                ? "none"
+                                : theme === "dark"
+                                ? "1px solid rgba(255, 255, 255, 0.16)"
+                                : "1px solid rgba(0, 0, 0, 0.16)",
+                            color:
+                              donateWithToken === token.value
+                                ? "#FFFFFF"
+                                : theme === "dark"
+                                ? "rgba(255, 255, 255, 1)"
+                                : "rgba(9, 9, 11, 1)",
+                          }}
+                        >
+                          {token.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Balance Display */}
                     <div className="flex items-center justify-between mb-2">
                       <span
                         className="text-sm"
@@ -1735,7 +1811,7 @@ export default function Home() {
                               : "rgba(113, 113, 122, 1)",
                         }}
                       >
-                        Available USDC:
+                        Available {isTokenDonation ? tokenSymbol : "USDC"}:
                       </span>
                       <span
                         className="text-sm font-bold"
@@ -1746,7 +1822,7 @@ export default function Home() {
                               : "rgba(9, 9, 11, 1)",
                         }}
                       >
-                        ${usdcBalance.toFixed(2)}
+                        {formattedDonationBalance}
                       </span>
                     </div>
 
@@ -1842,7 +1918,7 @@ export default function Home() {
                                 : "rgba(9, 9, 11, 1)",
                           }}
                         >
-                          ${customAmount}
+                          {donationAmountLabel}
                         </div>
                         <div
                           className="text-sm mt-1"
@@ -1853,7 +1929,7 @@ export default function Home() {
                                 : "rgba(113, 113, 122, 1)",
                           }}
                         >
-                          {sliderPercentage}% of your USDC balance
+                          {sliderPercentage}% of your {sliderBalanceLabel}
                         </div>
                       </div>
                     </div>
@@ -1867,11 +1943,19 @@ export default function Home() {
                             : "rgba(113, 113, 122, 1)",
                       }}
                     >
-                      You will get{" "}
-                      {(
-                        parseFloat(customAmount || "0") * dollarToTokenRatio
-                      ).toLocaleString()}{" "}
-                      {tokenSymbol}
+                      {isTokenDonation ? (
+                        <>
+                          You are donating {customAmount || "0"} {tokenSymbol}
+                        </>
+                      ) : (
+                        <>
+                          You will get{" "}
+                          {(
+                            parseFloat(customAmount || "0") * dollarToTokenRatio
+                          ).toLocaleString()}{" "}
+                          {tokenSymbol}
+                        </>
+                      )}
                     </p>
                   </div>
 
@@ -1949,11 +2033,7 @@ export default function Home() {
                   {/* Donate Button */}
                   <Button
                     onClick={handleDonate}
-                    disabled={
-                      isProcessing ||
-                      !customAmount ||
-                      parseFloat(customAmount) < 1
-                    }
+                    disabled={isDonateDisabled}
                     className="w-full font-bold py-3 rounded-full"
                     style={{
                       color:
@@ -1969,6 +2049,8 @@ export default function Home() {
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         Processing...
                       </>
+                    ) : isTokenDonation ? (
+                      `Donate ${customAmount || "0"} ${tokenSymbol}`
                     ) : (
                       `Donate $${customAmount || "0"}`
                     )}
@@ -1982,8 +2064,75 @@ export default function Home() {
                 </>
               ) : (
                 <>
-                  {/* Swap Tab Content */}
+                  {/* Mint Tab Content */}
                   <div className="space-y-4">
+                    {/* Connected Wallet Section */}
+                    <div
+                      className="flex items-center justify-between p-4 rounded-lg"
+                      style={{
+                        background:
+                          theme === "dark"
+                            ? "rgba(255, 255, 255, 0.06)"
+                            : "rgba(0, 0, 0, 0.06)",
+                        border:
+                          theme === "dark"
+                            ? "1px solid rgba(255, 255, 255, 0.16)"
+                            : "1px solid rgba(0, 0, 0, 0.16)",
+                      }}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="w-10 h-10 rounded flex items-center justify-center"
+                          style={{ background: "#744AC9" }}
+                        >
+                          <span
+                            className="text-xl"
+                            style={{
+                              color:
+                                theme === "dark"
+                                  ? "rgba(255, 255, 255, 1)"
+                                  : "rgba(9, 9, 11, 1)",
+                            }}
+                          >
+                            👤
+                          </span>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-400">
+                            Connected Wallet
+                          </p>
+                          <p
+                            className="text-sm font-bold"
+                            style={{
+                              color:
+                                theme === "dark"
+                                  ? "rgba(255, 255, 255, 1)"
+                                  : "rgba(9, 9, 11, 1)",
+                            }}
+                          >
+                            {publicKey
+                              ? formatAddress(publicKey.toString())
+                              : ""}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => disconnect()}
+                        className="text-sm"
+                        style={{
+                          color: "#EF4444",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.color = "#DC2626";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.color = "#EF4444";
+                        }}
+                      >
+                        Disconnect
+                      </button>
+                    </div>
+
                     {/* You're paying Section */}
                     <div className="flex flex-col gap-3">
                       <label
@@ -1995,8 +2144,34 @@ export default function Home() {
                               : "rgba(9, 9, 11, 1)",
                         }}
                       >
-                        You're paying
+                        You&apos;re paying (USDC)
                       </label>
+
+                      {/* Balance Display */}
+                      <div className="flex items-center justify-between mb-2">
+                        <span
+                          className="text-sm"
+                          style={{
+                            color:
+                              theme === "dark"
+                                ? "rgba(156, 163, 175, 1)"
+                                : "rgba(113, 113, 122, 1)",
+                          }}
+                        >
+                          Available USDC:
+                        </span>
+                        <span
+                          className="text-sm font-bold"
+                          style={{
+                            color:
+                              theme === "dark"
+                                ? "rgba(255, 255, 255, 1)"
+                                : "rgba(9, 9, 11, 1)",
+                          }}
+                        >
+                          ${usdcBalance.toFixed(2)}
+                        </span>
+                      </div>
 
                       <div
                         className="flex flex-row items-center p-4 gap-2 rounded-lg"
@@ -2012,7 +2187,7 @@ export default function Home() {
                           height: "68px",
                         }}
                       >
-                        {/* Token selector card */}
+                        {/* USDC token display */}
                         <div
                           className="flex flex-row items-center p-2 gap-1 rounded-lg"
                           style={{
@@ -2033,16 +2208,11 @@ export default function Home() {
                               width: "24px",
                               height: "24px",
                               borderRadius: "50%",
-                              background:
-                                swapFromToken === "SOL" ? "#14F195" : "#2775CA",
+                              background: "#2775CA",
                             }}
                           />
-                          <select
-                            value={swapFromToken}
-                            onChange={(e) =>
-                              setSwapFromToken(e.target.value as "SOL" | "USDC")
-                            }
-                            className="bg-transparent text-sm font-medium outline-none"
+                          <span
+                            className="text-sm font-medium"
                             style={{
                               color:
                                 theme === "dark"
@@ -2050,33 +2220,18 @@ export default function Home() {
                                   : "rgba(9, 9, 11, 1)",
                             }}
                           >
-                            <option value="SOL">SOL</option>
-                            <option value="USDC">USDC</option>
-                          </select>
-                          <svg
-                            width="20"
-                            height="20"
-                            viewBox="0 0 20 20"
-                            fill="none"
-                            style={{ marginLeft: "auto" }}
-                          >
-                            <path
-                              d="M5 7.5L10 12.5L15 7.5"
-                              stroke={theme === "dark" ? "#71717A" : "#3F3F46"}
-                              strokeWidth="1.5"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
+                            USDC
+                          </span>
                         </div>
 
                         {/* Amount input */}
                         <div className="flex flex-col justify-center items-end gap-0.5 flex-grow">
                           <input
                             type="number"
-                            value={swapFromAmount}
-                            onChange={(e) => setSwapFromAmount(e.target.value)}
+                            value={mintAmount}
+                            onChange={(e) => setMintAmount(e.target.value)}
                             className="bg-transparent text-right text-sm font-medium outline-none w-full"
+                            placeholder="0.00"
                             style={{
                               color:
                                 theme === "dark"
@@ -2093,12 +2248,7 @@ export default function Home() {
                                   : "rgba(113, 113, 122, 1)",
                             }}
                           >
-                            {formatPrice(
-                              calculateUsdValue(
-                                parseFloat(swapFromAmount) || 0,
-                                swapFromToken === "SOL" ? solPrice : usdcPrice
-                              )
-                            )}
+                            ${parseFloat(mintAmount || "0").toFixed(2)}
                           </span>
                         </div>
                       </div>
@@ -2110,7 +2260,7 @@ export default function Home() {
                             key={amount}
                             onClick={() => {
                               const value = amount.replace("$", "");
-                              setSwapFromAmount(value);
+                              setMintAmount(value);
                               setSelectedQuickAmount(amount);
                             }}
                             className="flex flex-col justify-center items-center py-1.5 px-4 rounded-lg text-sm font-medium transition-colors flex-1"
@@ -2280,7 +2430,9 @@ export default function Home() {
                                   : "rgba(9, 9, 11, 1)",
                             }}
                           >
-                            {swapToAmount}
+                            {(
+                              parseFloat(mintAmount || "0") * dollarToTokenRatio
+                            ).toLocaleString()}
                           </span>
                           <span
                             className="text-xs"
@@ -2291,22 +2443,13 @@ export default function Home() {
                                   : "rgba(113, 113, 122, 1)",
                             }}
                           >
-                            {swapQuote
-                              ? formatPrice(
-                                  calculateUsdValue(
-                                    parseFloat(swapFromAmount) || 0,
-                                    swapFromToken === "SOL"
-                                      ? solPrice
-                                      : usdcPrice
-                                  )
-                                )
-                              : "$0.00"}
+                            ≈ ${parseFloat(mintAmount || "0").toFixed(2)}
                           </span>
                         </div>
                       </div>
                     </div>
 
-                    {/* Rate and Fee Info */}
+                    {/* Rate Info */}
                     <div
                       className="p-4 rounded-lg space-y-2"
                       style={{
@@ -2329,7 +2472,7 @@ export default function Home() {
                                 : "rgba(113, 113, 122, 1)",
                           }}
                         >
-                          Rate
+                          Exchange Rate
                         </span>
                         <span
                           className="font-medium"
@@ -2340,42 +2483,19 @@ export default function Home() {
                                 : "rgba(9, 9, 11, 1)",
                           }}
                         >
-                          1 SOL ≈ 1,000,000 {tokenSymbol}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span
-                          style={{
-                            color:
-                              theme === "dark"
-                                ? "rgba(156, 163, 175, 1)"
-                                : "rgba(113, 113, 122, 1)",
-                          }}
-                        >
-                          Service fee
-                        </span>
-                        <span
-                          className="font-medium"
-                          style={{
-                            color:
-                              theme === "dark"
-                                ? "rgba(255, 255, 255, 1)"
-                                : "rgba(9, 9, 11, 1)",
-                          }}
-                        >
-                          0.5%
+                          $1 = {dollarToTokenRatio.toLocaleString()}{" "}
+                          {tokenSymbol}
                         </span>
                       </div>
                     </div>
 
-                    {/* Swap Button */}
+                    {/* Mint Button */}
                     <Button
-                      onClick={handleSwap}
+                      onClick={handleMint}
                       disabled={
-                        isSwapping ||
-                        !swapQuote ||
-                        !swapFromAmount ||
-                        parseFloat(swapFromAmount) <= 0
+                        isProcessing ||
+                        !mintAmount ||
+                        parseFloat(mintAmount) <= 0
                       }
                       className="w-full font-bold py-3 rounded-full"
                       style={{
@@ -2388,21 +2508,21 @@ export default function Home() {
                         border: "none",
                       }}
                     >
-                      {isSwapping ? (
+                      {isProcessing ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Swapping...
+                          Minting...
                         </>
                       ) : (
-                        `Swap ${
-                          swapFromAmount || "0"
-                        } ${swapFromToken} for ${tokenSymbol}`
+                        `Mint ${(
+                          parseFloat(mintAmount || "0") * dollarToTokenRatio
+                        ).toLocaleString()} ${tokenSymbol}`
                       )}
                     </Button>
 
-                    {swapError && (
+                    {error && (
                       <div className="text-sm text-red-500 text-center">
-                        {swapError}
+                        {error}
                       </div>
                     )}
 

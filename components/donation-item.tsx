@@ -5,7 +5,7 @@ interface DonationItemProps {
   donor_address: string;
   donor_name: string | null;
   amount_usd: number;
-  tokens_minted: number;
+  tokens_amount: number;
   message: string | null;
   created_at: string;
   tokenSymbol: string;
@@ -15,7 +15,7 @@ interface DonationItemProps {
 export function DonationItem({
   donor_name,
   amount_usd,
-  tokens_minted,
+  tokens_amount,
   message,
   created_at,
   tokenSymbol,
@@ -126,7 +126,7 @@ export function DonationItem({
             ${amount_usd} USDC
           </span>
           <span className="text-gray-400 mx-2">|</span>
-          <span className="text-gray-400">Tokens Received: </span>
+          <span className="text-gray-400">Tokens: </span>
           <span
             style={{
               color:
@@ -135,7 +135,7 @@ export function DonationItem({
                   : "rgba(9, 9, 11, 0.8)",
             }}
           >
-            {formatTokens(tokens_minted)} {tokenSymbol}
+            {formatTokens(tokens_amount)} {tokenSymbol}
           </span>
         </p>
       </div>

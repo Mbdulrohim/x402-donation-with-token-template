@@ -11,7 +11,7 @@ export const donations = pgTable('donations', {
   
   // Amounts
   amountUsd: decimal('amount_usd', { precision: 10, scale: 2 }).notNull(),
-  tokensMinted: bigint('tokens_minted', { mode: 'number' }).notNull(),
+  tokensAmount: bigint('tokens_amount', { mode: 'number' }).notNull(),
   
   // Message
   message: text('message'),

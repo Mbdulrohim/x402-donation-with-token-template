@@ -258,6 +258,7 @@ const network = (process.env.NEXT_PUBLIC_SOLANA_NETWORK || "solana-devnet") as
   | "solana"
   | "solana-devnet";
 const resourceWallet = process.env.RESOURCE_SERVER_WALLET_ADDRESS;
+const tokenMint = process.env.TOKEN_MINT || process.env.NEXT_PUBLIC_TOKEN_MINT_ADDRESS;
 
 // Validate required environment variables
 if (!resourceWallet) {
@@ -266,10 +267,33 @@ if (!resourceWallet) {
   );
 }
 
+if (!tokenMint) {
+  throw new Error(
+    "TOKEN_MINT or NEXT_PUBLIC_TOKEN_MINT_ADDRESS environment variable is required but not set"
+  );
+}
+
 // Configure x402 middleware for protected routes
 export const middleware = paymentMiddleware(
   resourceWallet,
   {
+    // Mint route: Pay with USDC, receive TOKEN
+    "/api/mint": {
+      price: "$1", // Minimum $1 payment in USDC
+      network,
+      config: {
+        description: "Mint tokens by paying with USDC",
+      },
+    },
+    // Donate route: Pay with TOKEN, write to community board
+    "/api/write-message": {
+      price: `1 ${tokenMint}`, // Minimum 1 TOKEN payment
+      network,
+      config: {
+        description: "Donate tokens and write to community board",
+      },
+    },
+    // Legacy routes for backwards compatibility (USDC payment, receive TOKEN)
     "/api/donate/1": {
       price: "$1",
       network,
@@ -291,14 +315,6 @@ export const middleware = paymentMiddleware(
         description: "Donate $10 and receive tokens",
       },
     },
-    // Custom donation with message (amount determined by user)
-    "/api/write-message": {
-      price: "$1", // Minimum $1 donation
-      network,
-      config: {
-        description: "Donate with custom amount and message",
-      },
-    },
   },
   {
     url: (process.env.FACILITATOR_URL ||
@@ -308,5 +324,5 @@ export const middleware = paymentMiddleware(
 
 // Configure which routes the middleware should run on
 export const config = {
-  matcher: ["/api/donate/:path*", "/api/write-message"],
+  matcher: ["/api/donate/:path*", "/api/write-message", "/api/mint"],
 };

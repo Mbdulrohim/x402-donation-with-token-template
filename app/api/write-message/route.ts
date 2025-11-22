@@ -1,13 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  getTokenConfig,
-  calculateTokensForDonation,
-  transferTokens,
-} from "@/lib/token";
+import { getTokenConfig } from "@/lib/token";
 import { storeDonation } from "@/lib/db";
 
 export interface WriteMessageRequest {
-  amount: number; // USD amount (minimum $1)
+  amount: number; // TOKEN amount (minimum 1)
   name?: string; // Optional donor name
   message?: string; // Optional message
 }
@@ -15,12 +11,13 @@ export interface WriteMessageRequest {
 /**
  * POST /api/write-message
  *
- * Donate custom amount with optional name and message
- * Protected by x402 middleware - requires minimum $1 payment
+ * Donate tokens with optional name and message
+ * Protected by x402 middleware - requires TOKEN payment
+ * This route accepts TOKEN as payment and writes to community board
  *
  * Body:
  * {
- *   "amount": 25.50,        // USD amount
+ *   "amount": 100,          // TOKEN amount
  *   "name": "John Doe",     // optional
  *   "message": "To the moon!" // optional
  * }
@@ -56,7 +53,7 @@ export async function POST(request: NextRequest) {
     // Validate amount
     if (!amount || amount < 1) {
       return NextResponse.json(
-        { success: false, error: "Amount must be at least $1" },
+        { success: false, error: "Amount must be at least 1 TOKEN" },
         { status: 400 }
       );
     }
@@ -64,43 +61,30 @@ export async function POST(request: NextRequest) {
     // Get token configuration
     const tokenConfig = getTokenConfig();
 
-    // Calculate tokens to mint
-    const tokensToMint = calculateTokensForDonation(
-      amount,
-      tokenConfig.dollarToTokenRatio
-    );
+    // Calculate USD equivalent for display purposes
+    const usdEquivalent = amount / tokenConfig.dollarToTokenRatio;
 
-    if (tokensToMint <= 0) {
-      return NextResponse.json(
-        { success: false, error: "Invalid donation amount" },
-        { status: 400 }
-      );
-    }
-
-    // Transfer tokens to donor
-    const signature = await transferTokens(payerAddress, tokensToMint);
-
-    // Store donation record with message in launcher database
+    // Store donation record with message in database
+    // Note: We don't mint tokens here - user is paying WITH tokens
     await storeDonation(
       payerAddress,
+      usdEquivalent,
       amount,
-      tokensToMint,
       name,
       message,
-      signature
+      "" // No transaction signature needed since we're receiving, not sending
     );
 
     return NextResponse.json({
       success: true,
       message: `Thank you${
         name ? `, ${name},` : ""
-      } for your $${amount} donation!`,
+      } for your ${amount.toLocaleString()} ${tokenConfig.symbol} donation!`,
       data: {
         donator: payerAddress,
-        amountUsd: amount,
-        tokensMinted: tokensToMint,
+        tokensDonated: amount,
+        usdEquivalent: usdEquivalent,
         tokenSymbol: tokenConfig.symbol,
-        transactionSignature: signature,
         name: name || null,
         message: message || null,
       },
