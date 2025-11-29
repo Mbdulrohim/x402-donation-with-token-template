@@ -112,12 +112,14 @@ function WalletSelectionOverlay({
   };
 
   const handleConnect = async (walletName: WalletName) => {
-    const walletToConnect = wallets.find(w => w.adapter.name === walletName);
+    const walletToConnect = wallets.find((w) => w.adapter.name === walletName);
     if (!walletToConnect) {
       throw new Error("Wallet not found");
     }
     if (walletToConnect.readyState === WalletReadyState.NotDetected) {
-      throw new Error("Wallet not detected. Please install the wallet extension.");
+      throw new Error(
+        "Wallet not detected. Please install the wallet extension."
+      );
     }
     if (walletToConnect.readyState !== WalletReadyState.Installed) {
       throw new Error("Wallet not ready. Please try again.");
@@ -195,11 +197,19 @@ function WalletSelectionOverlay({
                   role="button"
                   tabIndex={0}
                   onClick={() => {
-                    if (isPendingOrConnecting || walletOption.readyState === WalletReadyState.NotDetected) return;
+                    if (
+                      isPendingOrConnecting ||
+                      walletOption.readyState === WalletReadyState.NotDetected
+                    )
+                      return;
                     onRowAction();
                   }}
                   onKeyDown={(e) => {
-                    if (isPendingOrConnecting || walletOption.readyState === WalletReadyState.NotDetected) return;
+                    if (
+                      isPendingOrConnecting ||
+                      walletOption.readyState === WalletReadyState.NotDetected
+                    )
+                      return;
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
                       onRowAction();
@@ -209,7 +219,12 @@ function WalletSelectionOverlay({
                     index !== visibleWallets.length - 1
                       ? "border-b border-white/10"
                       : ""
-                  } ${isPendingOrConnecting || walletOption.readyState === WalletReadyState.NotDetected ? "cursor-not-allowed" : "cursor-pointer"}`}
+                  } ${
+                    isPendingOrConnecting ||
+                    walletOption.readyState === WalletReadyState.NotDetected
+                      ? "cursor-not-allowed"
+                      : "cursor-pointer"
+                  }`}
                 >
                   <div className="flex items-center gap-3">
                     <div className="relative h-10 w-10 overflow-hidden rounded-full border border-white/10 bg-white/5">
@@ -238,7 +253,10 @@ function WalletSelectionOverlay({
                   </div>
                   <button
                     type="button"
-                    disabled={isPendingOrConnecting || walletOption.readyState === WalletReadyState.NotDetected}
+                    disabled={
+                      isPendingOrConnecting ||
+                      walletOption.readyState === WalletReadyState.NotDetected
+                    }
                     onClick={(e) => {
                       e.stopPropagation();
                       onRowAction();
