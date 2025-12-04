@@ -47,10 +47,7 @@ export function useX402Payment() {
 
     const merchantWalletAddress =
       process.env.NEXT_PUBLIC_MERCHANT_WALLET_ADDRESS;
-    const tokenMintAddress =
-      process.env.NEXT_PUBLIC_TOKEN_MINT ||
-      process.env.NEXT_PUBLIC_TOKEN_MINT_ADDRESS;
-
+    const tokenMintAddress = process.env.NEXT_PUBLIC_TOKEN_MINT;
     if (!merchantWalletAddress || !tokenMintAddress) {
       throw new Error(
         "Missing merchant wallet or token mint configuration for ATA creation."

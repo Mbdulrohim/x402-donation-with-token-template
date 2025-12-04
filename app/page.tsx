@@ -202,9 +202,7 @@ export default function Home() {
       return;
     }
 
-    const tokenMintAddress =
-      process.env.NEXT_PUBLIC_TOKEN_MINT_ADDRESS ||
-      process.env.NEXT_PUBLIC_TOKEN_MINT;
+    const tokenMintAddress = process.env.NEXT_PUBLIC_TOKEN_MINT;
 
     if (!tokenMintAddress) {
       setTokenBalance(0);
