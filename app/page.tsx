@@ -938,125 +938,6 @@ export default function Home() {
                       </button>
                     ))}
                   </div>
-
-                  {/* Chevron Divider */}
-                  <div
-                    className="relative h-px my-6 w-full"
-                    style={{
-                      background:
-                        theme === "dark"
-                          ? "rgba(255,255,255,0.1)"
-                          : "rgba(0,0,0,0.1)",
-                    }}
-                  >
-                    <div
-                      className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 p-1.5 rounded-full"
-                      style={{
-                        background: theme === "dark" ? "#000" : "#fff",
-                        border: `1px solid ${
-                          theme === "dark"
-                            ? "rgba(255,255,255,0.1)"
-                            : "rgba(0,0,0,0.1)"
-                        }`,
-                      }}
-                    >
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <polyline points="6 9 12 15 18 9"></polyline>
-                      </svg>
-                    </div>
-                  </div>
-
-                  {/* To Receive Section */}
-                  <div className="space-y-2">
-                    <label
-                      className="text-sm font-medium"
-                      style={{ color: theme === "dark" ? "#fff" : "#000" }}
-                    >
-                      To receive
-                    </label>
-
-                    <div
-                      className="p-4 rounded-xl flex items-center justify-between"
-                      style={{
-                        background:
-                          theme === "dark"
-                            ? "rgba(255,255,255,0.06)"
-                            : "rgba(0,0,0,0.06)",
-                        border:
-                          theme === "dark"
-                            ? "1px solid rgba(255,255,255,0.16)"
-                            : "rgba(0,0,0,0.16)",
-                      }}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full flex items-center justify-center overflow-hidden bg-gradient-to-br from-blue-400 to-purple-500">
-                          {tokenImage ? (
-                            <img
-                              src={tokenImage}
-                              alt={tokenSymbol}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <span className="text-white text-xs font-bold">
-                              {tokenSymbol.slice(0, 2)}
-                            </span>
-                          )}
-                        </div>
-                        <span
-                          className="font-bold text-lg"
-                          style={{ color: theme === "dark" ? "#fff" : "#000" }}
-                        >
-                          {tokenSymbol}
-                        </span>
-                      </div>
-                      <div className="text-right">
-                        <div
-                          className="font-bold text-xl"
-                          style={{ color: theme === "dark" ? "#fff" : "#000" }}
-                        >
-                          {(
-                            parseFloat(customAmount || "0") * dollarToTokenRatio
-                          ).toLocaleString()}
-                        </div>
-                        <div
-                          className="text-sm"
-                          style={{ color: "rgba(156, 163, 175, 1)" }}
-                        >
-                          ≈ ${parseFloat(customAmount || "0").toFixed(2)}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Reward Rate */}
-                  <div
-                    className="p-3 rounded-lg text-center text-sm font-medium flex items-center justify-center gap-2"
-                    style={{
-                      background:
-                        theme === "dark"
-                          ? "rgba(255,255,255,0.03)"
-                          : "rgba(0,0,0,0.03)",
-                      border:
-                        theme === "dark"
-                          ? "1px solid rgba(255,255,255,0.1)"
-                          : "rgba(0,0,0,0.1)",
-                      color: "rgba(156, 163, 175, 1)",
-                    }}
-                  >
-                    <span>Reward Rate</span>
-                    <span style={{ color: theme === "dark" ? "#fff" : "#000" }}>
-                      $1 = {dollarToTokenRatio.toLocaleString()} {tokenSymbol}
-                    </span>
-                  </div>
                 </div>
 
                 {/* Your Name Section */}
@@ -1128,6 +1009,89 @@ export default function Home() {
                           : "1px solid rgba(0, 0, 0, 0.16)",
                     }}
                   />
+                </div>
+
+                {/* To Receive Section */}
+                <div className="space-y-2 mt-4">
+                  <label
+                    className="text-sm font-medium"
+                    style={{ color: theme === "dark" ? "#fff" : "#000" }}
+                  >
+                    Reward
+                  </label>
+
+                  <div
+                    className="p-4 rounded-xl flex items-center justify-between"
+                    style={{
+                      background:
+                        theme === "dark"
+                          ? "rgba(255,255,255,0.06)"
+                          : "rgba(0,0,0,0.06)",
+                      border:
+                        theme === "dark"
+                          ? "1px solid rgba(255,255,255,0.16)"
+                          : "rgba(0,0,0,0.16)",
+                    }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center overflow-hidden bg-gradient-to-br from-blue-400 to-purple-500">
+                        {tokenImage ? (
+                          <img
+                            src={tokenImage}
+                            alt={tokenSymbol}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <span className="text-white text-xs font-bold">
+                            {tokenSymbol.slice(0, 2)}
+                          </span>
+                        )}
+                      </div>
+                      <span
+                        className="font-bold text-lg"
+                        style={{ color: theme === "dark" ? "#fff" : "#000" }}
+                      >
+                        {tokenSymbol}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <div
+                        className="font-bold text-xl"
+                        style={{ color: theme === "dark" ? "#fff" : "#000" }}
+                      >
+                        {(
+                          parseFloat(customAmount || "0") * dollarToTokenRatio
+                        ).toLocaleString()}
+                      </div>
+                      <div
+                        className="text-sm"
+                        style={{ color: "rgba(156, 163, 175, 1)" }}
+                      >
+                        ≈ ${parseFloat(customAmount || "0").toFixed(2)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Reward Rate */}
+                <div
+                  className="p-3 rounded-lg text-center text-sm font-medium flex items-center justify-center gap-2 mt-2"
+                  style={{
+                    background:
+                      theme === "dark"
+                        ? "rgba(255,255,255,0.03)"
+                        : "rgba(0,0,0,0.03)",
+                    border:
+                      theme === "dark"
+                        ? "1px solid rgba(255,255,255,0.1)"
+                        : "rgba(0,0,0,0.1)",
+                    color: "rgba(156, 163, 175, 1)",
+                  }}
+                >
+                  <span>Reward Rate</span>
+                  <span style={{ color: theme === "dark" ? "#fff" : "#000" }}>
+                    $1 = {dollarToTokenRatio.toLocaleString()} {tokenSymbol}
+                  </span>
                 </div>
 
                 {/* Donate Button */}
