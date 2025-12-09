@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -83,7 +84,7 @@ export default function Home() {
   );
   const [usdcBalance, setUsdcBalance] = useState<number>(0);
   const [tokenBalance, setTokenBalance] = useState<number>(0);
-  const [sliderPercentage, setSliderPercentage] = useState<number>(10);
+
   const [customAmount, setCustomAmount] = useState("0");
   const [donorName, setDonorName] = useState("");
   const [donorMessage, setDonorMessage] = useState("");
@@ -95,7 +96,7 @@ export default function Home() {
   // Removed activeTab state as we are combining views
   // const [mintAmount, setMintAmount] = useState("1"); // Removed mint logic
   // const [selectedQuickAmount, setSelectedQuickAmount] = useState<string | null>(null); // Removed mint logic
-  const [donateWithToken] = useState<"TOKEN">("TOKEN");
+  const [donateWithToken] = useState<"TOKEN" | "USD">("USD");
   // const [solPrice, setSolPrice] = useState<number>(0);
   // const [usdcPrice, setUsdcPrice] = useState<number>(1);
 
@@ -116,18 +117,7 @@ export default function Home() {
   const dollarToTokenRatio = Math.floor(mintableSupply / donationTarget);
 
   const isTokenDonation = donateWithToken === "TOKEN";
-  const donationBalance = isTokenDonation ? tokenBalance : usdcBalance;
-  const formattedDonationBalance = isTokenDonation
-    ? `${donationBalance.toLocaleString(undefined, {
-        maximumFractionDigits: 2,
-      })} ${tokenSymbol}`
-    : `$${donationBalance.toFixed(2)}`;
-  const donationAmountLabel = isTokenDonation
-    ? `${customAmount || "0"} ${tokenSymbol}`
-    : `$${customAmount || "0"}`;
-  const sliderBalanceLabel = isTokenDonation
-    ? `${tokenSymbol} balance`
-    : "USDC balance";
+
   const parsedDonationAmount = parseFloat(customAmount || "0") || 0;
   const minimumDonationAmount = isTokenDonation ? 1 : 1;
   const isDonateDisabled =
@@ -264,24 +254,16 @@ export default function Home() {
     fetchTokenBalance();
   }, [fetchTokenBalance]);
 
-  // Calculate amount based on slider percentage
-  useEffect(() => {
-    const balance = tokenBalance;
-    const calculatedAmount = (balance * sliderPercentage) / 100;
-
-    setCustomAmount(Math.max(0, Math.floor(calculatedAmount)).toString());
-  }, [sliderPercentage, tokenBalance]);
-
-  const handleSliderChange = (percentage: number) => {
-    setSliderPercentage(percentage);
-  };
+  // const handleSliderChange = (percentage: number) => {
+  //   setSliderPercentage(percentage);
+  // };
 
   const handleDonate = async () => {
     if (!connected || !customAmount) return;
 
     const amount = parseFloat(customAmount);
     if (amount < 1) {
-      toast.error("Minimum donation is 1 TOKEN");
+      toast.error("Minimum donation is $1");
       return;
     }
 
@@ -293,7 +275,7 @@ export default function Home() {
       });
       setDonationResult(result as DonationResult);
       setCustomAmount("0");
-      setSliderPercentage(10);
+
       setDonorName("");
       setDonorMessage("");
       fetchMessages(); // Refresh messages
@@ -969,51 +951,19 @@ export default function Home() {
                 </div>
 
                 {/* Amount Section */}
-                <div className="space-y-3">
-                  <label
-                    className="text-sm font-bold block"
-                    style={{
-                      color:
-                        theme === "dark"
-                          ? "rgba(255, 255, 255, 1)"
-                          : "rgba(9, 9, 11, 1)",
-                    }}
-                  >
-                    Amount
-                  </label>
-
-                  {/* Token Balance Hint */}
-                  {isTokenDonation && tokenBalance === 0 && (
-                    <div
-                      className="text-sm p-3 rounded-lg mb-3"
-                      style={{
-                        background:
-                          theme === "dark"
-                            ? "rgba(255, 255, 255, 0.06)"
-                            : "rgba(0, 0, 0, 0.06)",
-                        color:
-                          theme === "dark"
-                            ? "rgba(255, 255, 255, 0.7)"
-                            : "rgba(113, 113, 122, 1)",
-                      }}
-                    >
-                      You don&apos;t have any {tokenSymbol} tokens yet.
-                    </div>
-                  )}
-
-                  {/* Balance Display */}
-                  <div className="flex items-center justify-between mb-2">
-                    <span
-                      className="text-sm"
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <label
+                      className="text-sm font-medium"
                       style={{
                         color:
                           theme === "dark"
-                            ? "rgba(156, 163, 175, 1)"
-                            : "rgba(113, 113, 122, 1)",
+                            ? "rgba(255, 255, 255, 1)"
+                            : "rgba(9, 9, 11, 1)",
                       }}
                     >
-                      Available {isTokenDonation ? tokenSymbol : "USDC"}:
-                    </span>
+                      You&apos;re donating (USDC)
+                    </label>
                     <span
                       className="text-sm font-bold"
                       style={{
@@ -1023,182 +973,161 @@ export default function Home() {
                             : "rgba(9, 9, 11, 1)",
                       }}
                     >
-                      {formattedDonationBalance}
+                      Available USDC: ${usdcBalance.toFixed(2)}
                     </span>
                   </div>
 
-                  {/* Slider */}
-                  <div className="space-y-4">
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      step="1"
-                      value={sliderPercentage}
-                      onChange={(e) =>
-                        handleSliderChange(Number(e.target.value))
-                      }
-                      className="w-full h-2 rounded-lg appearance-none cursor-pointer"
-                      style={{
-                        background: `linear-gradient(to right, #744AC9 0%, #22EBAD ${sliderPercentage}%, ${
-                          theme === "dark"
-                            ? "rgba(255,255,255,0.16)"
-                            : "#E4E4E7"
-                        } ${sliderPercentage}%, ${
-                          theme === "dark"
-                            ? "rgba(255,255,255,0.16)"
-                            : "#E4E4E7"
-                        } 100%)`,
-                      }}
-                    />
-
-                    {/* Percentage markers */}
-                    <div className="flex justify-between text-xs">
-                      {[0, 25, 50, 75, 100].map((percent) => {
-                        const hasMarker = [25, 75, 100].includes(percent);
-                        return (
-                          <button
-                            key={percent}
-                            onClick={() => handleSliderChange(percent)}
-                            className="transition-all flex flex-col items-center gap-1"
-                            style={{
-                              color:
-                                sliderPercentage === percent
-                                  ? theme === "dark"
-                                    ? "#FFFFFF"
-                                    : "#09090B"
-                                  : theme === "dark"
-                                  ? "rgba(156, 163, 175, 1)"
-                                  : "rgba(113, 113, 122, 1)",
-                              fontWeight:
-                                sliderPercentage === percent ? 600 : 400,
-                            }}
-                          >
-                            {hasMarker && (
-                              <div
-                                style={{
-                                  width: "8px",
-                                  height: "8px",
-                                  borderRadius: "50%",
-                                  background:
-                                    sliderPercentage === percent
-                                      ? "linear-gradient(to right, #744AC9, #22EBAD)"
-                                      : theme === "dark"
-                                      ? "rgba(255, 255, 255, 0.3)"
-                                      : "rgba(0, 0, 0, 0.3)",
-                                  marginBottom: "4px",
-                                }}
-                              />
-                            )}
-                            {percent}%
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {/* Amount display */}
-                    <div
-                      className="text-center p-4 rounded-lg"
-                      style={{
-                        background:
-                          theme === "dark"
-                            ? "rgba(255, 255, 255, 0.06)"
-                            : "rgba(0, 0, 0, 0.06)",
-                        border:
-                          theme === "dark"
-                            ? "1px solid rgba(255, 255, 255, 0.16)"
-                            : "1px solid rgba(0, 0, 0, 0.16)",
-                      }}
-                    >
-                      <div
-                        className="text-3xl font-bold"
+                  {/* Quick Amounts */}
+                  <div className="grid grid-cols-4 gap-3">
+                    {[1, 5, 10, 50].map((amount) => (
+                      <button
+                        key={amount}
+                        onClick={() => setCustomAmount(amount.toString())}
+                        className="py-2.5 rounded-lg text-sm font-medium transition-colors"
                         style={{
+                          background:
+                            customAmount === amount.toString()
+                              ? theme === "dark"
+                                ? "rgba(255, 255, 255, 0.1)"
+                                : "rgba(0, 0, 0, 0.1)"
+                              : "transparent",
+                          border:
+                            theme === "dark"
+                              ? "1px solid rgba(255, 255, 255, 0.16)"
+                              : "1px solid rgba(0, 0, 0, 0.16)",
                           color:
                             theme === "dark"
                               ? "rgba(255, 255, 255, 1)"
                               : "rgba(9, 9, 11, 1)",
                         }}
                       >
-                        {donationAmountLabel}
-                      </div>
-                      <div
-                        className="text-sm mt-1"
-                        style={{
-                          color:
-                            theme === "dark"
-                              ? "rgba(156, 163, 175, 1)"
-                              : "rgba(113, 113, 122, 1)",
-                        }}
-                      >
-                        {sliderPercentage}% of your {sliderBalanceLabel}
-                      </div>
-                    </div>
+                        ${amount}
+                      </button>
+                    ))}
+                  </div>
 
-                    {/* Custom Amount Input */}
+                  {/* Chevron Divider */}
+                  <div
+                    className="relative h-px my-6 w-full"
+                    style={{
+                      background:
+                        theme === "dark"
+                          ? "rgba(255,255,255,0.1)"
+                          : "rgba(0,0,0,0.1)",
+                    }}
+                  >
                     <div
+                      className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 p-1.5 rounded-full"
                       style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "8px",
+                        background: theme === "dark" ? "#000" : "#fff",
+                        border: `1px solid ${
+                          theme === "dark"
+                            ? "rgba(255,255,255,0.1)"
+                            : "rgba(0,0,0,0.1)"
+                        }`,
                       }}
                     >
-                      <label
-                        style={{
-                          fontSize: "14px",
-                          fontWeight: 500,
-                          color: theme === "dark" ? "#FFFFFF" : "#09090B",
-                        }}
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
                       >
-                        Or enter custom amount:
-                      </label>
-                      <Input
-                        type="number"
-                        value={customAmount}
-                        onChange={(e) => setCustomAmount(e.target.value)}
-                        placeholder="Enter token amount"
-                        min="0"
-                        style={{
-                          color: theme === "dark" ? "#FFFFFF" : "#09090B",
-                          background:
-                            theme === "dark"
-                              ? "rgba(255, 255, 255, 0.06)"
-                              : "rgba(0, 0, 0, 0.06)",
-                          border:
-                            theme === "dark"
-                              ? "1px solid rgba(255, 255, 255, 0.16)"
-                              : "1px solid rgba(0, 0, 0, 0.16)",
-                        }}
-                      />
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                      </svg>
                     </div>
                   </div>
 
-                  <p
-                    className="text-xs"
+                  {/* To Receive Section */}
+                  <div className="space-y-2">
+                    <label
+                      className="text-sm font-medium"
+                      style={{ color: theme === "dark" ? "#fff" : "#000" }}
+                    >
+                      To receive
+                    </label>
+
+                    <div
+                      className="p-4 rounded-xl flex items-center justify-between"
+                      style={{
+                        background:
+                          theme === "dark"
+                            ? "rgba(255,255,255,0.06)"
+                            : "rgba(0,0,0,0.06)",
+                        border:
+                          theme === "dark"
+                            ? "1px solid rgba(255,255,255,0.16)"
+                            : "rgba(0,0,0,0.16)",
+                      }}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full flex items-center justify-center overflow-hidden bg-gradient-to-br from-blue-400 to-purple-500">
+                          {tokenImage ? (
+                            <img
+                              src={tokenImage}
+                              alt={tokenSymbol}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-white text-xs font-bold">
+                              {tokenSymbol.slice(0, 2)}
+                            </span>
+                          )}
+                        </div>
+                        <span
+                          className="font-bold text-lg"
+                          style={{ color: theme === "dark" ? "#fff" : "#000" }}
+                        >
+                          {tokenSymbol}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <div
+                          className="font-bold text-xl"
+                          style={{ color: theme === "dark" ? "#fff" : "#000" }}
+                        >
+                          {(
+                            parseFloat(customAmount || "0") * dollarToTokenRatio
+                          ).toLocaleString()}
+                        </div>
+                        <div
+                          className="text-sm"
+                          style={{ color: "rgba(156, 163, 175, 1)" }}
+                        >
+                          ≈ ${parseFloat(customAmount || "0").toFixed(2)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Reward Rate */}
+                  <div
+                    className="p-3 rounded-lg text-center text-sm font-medium flex items-center justify-center gap-2"
                     style={{
-                      color:
+                      background:
                         theme === "dark"
-                          ? "rgba(156, 163, 175, 1)"
-                          : "rgba(113, 113, 122, 1)",
+                          ? "rgba(255,255,255,0.03)"
+                          : "rgba(0,0,0,0.03)",
+                      border:
+                        theme === "dark"
+                          ? "1px solid rgba(255,255,255,0.1)"
+                          : "rgba(0,0,0,0.1)",
+                      color: "rgba(156, 163, 175, 1)",
                     }}
                   >
-                    {isTokenDonation ? (
-                      <>
-                        You are donating {customAmount || "0"} {tokenSymbol}
-                      </>
-                    ) : (
-                      <>
-                        You will get{" "}
-                        {(
-                          parseFloat(customAmount || "0") * dollarToTokenRatio
-                        ).toLocaleString()}{" "}
-                        {tokenSymbol}
-                      </>
-                    )}
-                  </p>
+                    <span>Reward Rate</span>
+                    <span style={{ color: theme === "dark" ? "#fff" : "#000" }}>
+                      $1 = {dollarToTokenRatio.toLocaleString()} {tokenSymbol}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Your Name Section */}
-                <div className="space-y-2">
+                <div className="space-y-2 mt-4">
                   <label
                     className="text-sm font-bold block"
                     style={{
