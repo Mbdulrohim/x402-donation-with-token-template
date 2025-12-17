@@ -42,14 +42,14 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 
-  /* x402 Theme - Dark with Cyan Accent */
-  --color-x402-bg: #0a1f1f;
-  --color-x402-card: #0f2828;
-  --color-x402-border: #1a3535;
-  --color-x402-text: #e0f2f2;
-  --color-x402-muted: #7a9999;
-  --color-x402-cyan: #00ffff;
-  --color-x402-cyan-hover: #00dddd;
+  /* x402 Theme - Dark */
+  --color-x402-bg: #09090b;
+  --color-x402-card: #09090b;
+  --color-x402-border: #27272a;
+  --color-x402-text: #fafafa;
+  --color-x402-muted: #a1a1aa;
+  --color-x402-cyan: #fafafa;
+  --color-x402-cyan-hover: #e4e4e7;
 }
 
 :root {
@@ -138,7 +138,7 @@ button {
 
 /* Custom wallet button styling to match x402 - only for main button, not modal */
 .wallet-adapter-button {
-  background: linear-gradient(to right, #744ac9, #22ebad) !important;
+  background: #cb272a !important;
   color: white !important;
   font-weight: 600 !important;
   border-radius: 9999px !important;
@@ -150,7 +150,7 @@ button {
 }
 
 .wallet-adapter-button:hover:not([disabled]) {
-  background: linear-gradient(to right, #744ac9, #22ebad) !important;
+  background: #cb272a !important;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(116, 74, 201, 0.5) !important;
 }

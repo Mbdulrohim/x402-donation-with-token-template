@@ -21,6 +21,7 @@ import { useTheme } from "next-themes";
 import { DonationItem } from "@/components/donation-item";
 import { DonationSuccess } from "@/components/donation-success";
 import { ScrollIndicator } from "@/components/ScrollIndicator";
+import { ChristmasDivider } from "@/components/christmas-divider";
 import { toast } from "sonner";
 
 interface DonationMessage {
@@ -239,9 +240,9 @@ export default function Home() {
     <>
       <ScrollIndicator />
       <main
-        className="min-h-screen flex flex-col md:flex-row md:h-screen md:overflow-hidden"
+        className="min-h-screen flex flex-col md:flex-row md:h-screen md:overflow-hidden relative"
         style={{
-          background: theme === "dark" ? "#000000" : "#FFFFFF",
+          background: theme === "dark" ? "#000000" : "#FAFAFA",
         }}
       >
         {/* Desktop Layout */}
@@ -253,31 +254,66 @@ export default function Home() {
               theme === "dark"
                 ? "1px solid rgba(255, 255, 255, 0.16)"
                 : "1px solid rgba(228, 228, 231, 1)",
+            background:
+              theme === "dark"
+                ? "linear-gradient(180deg, #000000 0%, #09090b 100%)"
+                : "#FAFAFA",
           }}
         >
           {/* Header */}
           <header
-            className="border-b"
             style={{
               background:
                 theme === "dark"
-                  ? "rgba(9, 9, 11, 1)"
-                  : "rgba(255, 255, 255, 1)",
-              borderBottom:
-                theme === "dark"
-                  ? "1px solid rgba(255, 255, 255, 0.16)"
-                  : "1px solid rgba(228, 228, 231, 1)",
+                  ? "rgba(0, 0, 0, 0.95)"
+                  : "rgba(255, 255, 255, 0.95)",
+              borderBottom: "none",
+              height: "88px",
+              display: "flex",
+              alignItems: "center",
             }}
           >
             <div className="container mx-auto px-4 py-4 flex justify-between items-center">
               <div className="flex items-center gap-3">
                 {tokenImage && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={tokenImage}
-                    alt={tokenName}
-                    className="w-10 h-10 rounded-full"
-                  />
+                  <div
+                    className="relative flex items-center justify-center"
+                    style={{ width: "48px", height: "48px", flexShrink: 0 }}
+                  >
+                    <div
+                      className="absolute inset-0 rounded-full overflow-hidden"
+                      style={{
+                        width: "40px",
+                        height: "40px",
+                        margin: "auto",
+                      }}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={tokenImage}
+                        alt={tokenName}
+                        className="w-full h-full"
+                        style={{
+                          aspectRatio: "1 / 1",
+                          objectFit: "cover",
+                          objectPosition: "center",
+                        }}
+                      />
+                    </div>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src="/ImageRing.png"
+                      alt="Decorative Ring"
+                      className="absolute pointer-events-none"
+                      style={{
+                        top: "50%",
+                        left: "50%",
+                        transform: "translate(-50%, -50%)",
+                        width: "100%",
+                        height: "100%",
+                      }}
+                    />
+                  </div>
                 )}
                 <div>
                   <h1
@@ -297,7 +333,35 @@ export default function Home() {
             </div>
           </header>
 
-          <div className="container mx-auto px-4 py-8 flex flex-col flex-1 min-h-0">
+          <div className="hidden md:block">
+            <ChristmasDivider />
+          </div>
+
+          <div
+            className="container mx-auto px-4 py-8 flex flex-col flex-1 min-h-0 relative z-10"
+            style={{
+              backgroundImage: "url(/websitebg.png)",
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+              backgroundRepeat: "no-repeat",
+            }}
+          >
+            {/* Donation Statistic Heading */}
+            <h2
+              style={{
+                fontFamily:
+                  "var(--font-chelsea-market), Chelsea Market, cursive",
+                fontWeight: 400,
+                fontSize: "20px",
+                lineHeight: "28px",
+                letterSpacing: "-0.03em",
+                color: "#FAFAFA",
+                marginBottom: "16px",
+              }}
+            >
+              Donation Statistic
+            </h2>
+
             {/* Stats */}
             <div
               style={{
@@ -307,7 +371,7 @@ export default function Home() {
                 alignItems: "flex-start",
                 padding: "16px 24px",
                 gap: "24px",
-                background: theme === "dark" ? "#000000" : "#FFFFFF",
+                background: theme === "dark" ? "#09090b" : "#FFFFFF",
                 borderRadius: "12px",
                 alignSelf: "stretch",
                 marginBottom: "32px",
@@ -329,6 +393,36 @@ export default function Home() {
                   maskComposite: "exclude",
                   pointerEvents: "none",
                   zIndex: 1,
+                }}
+              />
+              {/* Ice Left */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/Ice-left.png"
+                alt="Ice decoration"
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: "-2px",
+                  width: "60px",
+                  height: "auto",
+                  pointerEvents: "none",
+                  zIndex: 3,
+                }}
+              />
+              {/* Ice Right */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/Ice-right.png"
+                alt="Ice decoration"
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  right: "-2px",
+                  width: "60px",
+                  height: "auto",
+                  pointerEvents: "none",
+                  zIndex: 3,
                 }}
               />
               {/* Stats Container */}
@@ -423,7 +517,7 @@ export default function Home() {
                           100
                         )}%`,
                         height: "100%",
-                        backgroundColor: "#10B981",
+                        backgroundColor: "#D42426",
                       }}
                     />
                   </div>
@@ -490,7 +584,7 @@ export default function Home() {
                           100
                         )}%`,
                         height: "100%",
-                        backgroundColor: "#3B82F6",
+                        backgroundColor: "#F8B229",
                       }}
                     />
                   </div>
@@ -574,6 +668,12 @@ export default function Home() {
                 <h1
                   className="font-normal"
                   style={{
+                    fontFamily:
+                      "var(--font-chelsea-market), Chelsea Market, cursive",
+                    fontWeight: 400,
+                    fontSize: "20px",
+                    lineHeight: "28px",
+                    letterSpacing: "-0.03em",
                     color:
                       theme === "dark"
                         ? "rgba(255, 255, 255, 1)"
@@ -666,15 +766,51 @@ export default function Home() {
                 className="overflow-hidden flex flex-col flex-1 min-h-0"
                 style={{
                   background:
-                    theme === "light"
-                      ? "rgba(255, 255, 255, 1)"
-                      : "transparent",
+                    theme === "dark"
+                      ? "rgba(18, 18, 18, 0.4)"
+                      : "rgba(255, 255, 255, 0.3)",
+                  backdropFilter:
+                    theme === "dark" ? "blur(32px)" : "blur(60px)",
+                  boxShadow:
+                    theme === "dark" ? "0px 1.66px 0px 0px #000000" : "none",
                   border:
                     theme === "dark"
                       ? "1px solid rgba(255, 255, 255, 0.16)"
                       : "1px solid rgba(228, 228, 231, 1)",
+                  position: "relative",
+                  overflow: "visible",
                 }}
               >
+                {/* Ice Left */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/Ice-left.png"
+                  alt="Ice decoration"
+                  style={{
+                    position: "absolute",
+                    width: "90.5px",
+                    height: "60.14px",
+                    left: "-3px",
+                    top: "-7px",
+                    zIndex: 1,
+                  }}
+                />
+
+                {/* Ice Right */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/Ice-right.png"
+                  alt="Ice decoration"
+                  style={{
+                    position: "absolute",
+                    width: "90.5px",
+                    height: "60.14px",
+                    right: "-3px",
+                    top: "-7px",
+                    transform: "rotate(360deg)",
+                    zIndex: 2,
+                  }}
+                />
                 <CardContent
                   className="flex-1 overflow-y-auto min-h-[400px] flex flex-col hide-scrollbar"
                   style={{
@@ -701,7 +837,21 @@ export default function Home() {
                     {messages.length === 0 && (
                       <div className="flex items-center justify-center h-full min-h-[400px]">
                         {/* Text Messages */}
-                        <div className="text-center space-y-2">
+                        <div className="text-center space-y-2 flex flex-col items-center">
+                          <div className="flex items-end justify-center -space-x-4 mb-4">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src="/tree.png"
+                              alt="Christmas Tree"
+                              className="w-24 h-auto object-contain z-0"
+                            />
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src="/santa.png"
+                              alt="Santa Claus"
+                              className="w-20 h-auto object-contain z-10"
+                            />
+                          </div>
                           <h3 className="text-lg font-bold">
                             No supporters yet
                           </h3>
@@ -731,22 +881,28 @@ export default function Home() {
           className="flex flex-col min-h-0 flex-1 order-1 md:order-2 md:overflow-y-auto"
         >
           <header
-            className="container mx-auto px-4 py-4"
+            className="container mx-auto px-4"
             style={{
               background:
                 theme === "dark"
-                  ? "rgba(9, 9, 11, 1)"
+                  ? "rgba(255, 255, 255, 0)"
                   : "rgba(255, 255, 255, 1)",
-              borderBottom:
-                theme === "dark"
-                  ? "1px solid rgba(255, 255, 255, 0.16)"
-                  : "1px solid rgba(228, 228, 231, 1)",
+              borderBottom: "none",
+              height: "88px",
+              display: "flex",
+              alignItems: "center",
             }}
           >
             <div>
               <h1
                 className="text-2xl font-bold text-nowrap"
                 style={{
+                  fontFamily:
+                    "var(--font-chelsea-market), Chelsea Market, cursive",
+                  fontWeight: 400,
+                  fontSize: "20px",
+                  lineHeight: "28px",
+                  letterSpacing: "-0.03em",
                   color:
                     theme === "dark"
                       ? "rgba(255, 255, 255, 1)"
@@ -760,16 +916,36 @@ export default function Home() {
                 donated
               </p>
             </div>
-            <div className="flex gap-2"></div>
           </header>
 
-          {/* Tabs */}
+          <ChristmasDivider />
+
+          {/* Gifts Decoration - Mobile/Desktop */}
+          <div
+            className="absolute bottom-0 right-0 w-full pointer-events-none md:block hidden"
+            style={{
+              display: "flex",
+              justifyContent: "flex-end",
+              alignItems: "flex-end",
+              zIndex: 0,
+            }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/gifts.png"
+              alt="Holiday Gifts"
+              style={{
+                maxHeight: "300px",
+                objectFit: "contain",
+                width: "auto",
+              }}
+            />
+          </div>
 
           <div
-            className="container mx-auto px-4 py-8 space-y-6"
+            className="container mx-auto px-4 py-8 space-y-6 relative z-10"
             style={{
-              background:
-                theme === "dark" ? "transparent" : "rgba(255, 255, 255, 1)",
+              background: "transparent",
             }}
           >
             {!connected ? (
@@ -777,6 +953,12 @@ export default function Home() {
                 <h1
                   className="text-xl font-bold mb-3"
                   style={{
+                    fontFamily:
+                      "var(--font-chelsea-market), Chelsea Market, cursive",
+                    fontWeight: 400,
+                    fontSize: "20px",
+                    lineHeight: "28px",
+                    letterSpacing: "-0.03em",
                     color:
                       theme === "dark"
                         ? "rgba(255, 255, 255, 1)"
@@ -801,8 +983,8 @@ export default function Home() {
                     gap: "8px",
                     width: "150px",
                     height: "40px",
-                    background:
-                      "linear-gradient(88.41deg, #744AC9 -3.85%, #22EBAD 111.06%), #09090B",
+                    background: "#CB272A",
+                    border: "1px solid #A21010",
                     borderRadius: "999px",
                     fontStyle: "normal",
                     fontWeight: 500,
@@ -810,7 +992,7 @@ export default function Home() {
                     lineHeight: "20px",
                     color: "#FFFFFF",
                     textShadow: "0px 3px 4px rgba(0, 0, 0, 0.2)",
-                    border: "none",
+
                     cursor: "pointer",
                     margin: "0 auto",
                   }}
@@ -832,6 +1014,7 @@ export default function Home() {
                       theme === "dark"
                         ? "1px solid rgba(255, 255, 255, 0.16)"
                         : "1px solid rgba(0, 0, 0, 0.16)",
+                    borderRadius: "16px",
                   }}
                 >
                   <div className="flex items-center gap-3">
@@ -1100,12 +1283,9 @@ export default function Home() {
                   disabled={isDonateDisabled}
                   className="w-full font-bold py-3 rounded-full"
                   style={{
-                    color:
-                      theme === "dark"
-                        ? "rgba(255, 255, 255, 1)"
-                        : "rgba(9, 9, 11, 1)",
-                    background: "linear-gradient(to right, #744AC9, #22EBAD)",
-                    border: "none",
+                    color: "#FFFFFF",
+                    background: "#CB272A",
+                    border: "1px solid #A21010",
                   }}
                 >
                   {isProcessing ? (
@@ -1122,7 +1302,7 @@ export default function Home() {
 
                 {/* Secure Payment Footer */}
                 <div className="flex items-center justify-center gap-2 text-xs text-gray-400">
-                  <span className="text-green-500">✓</span>
+                  <span className="text-gray-400">✓</span>
                   <span>Secure payment powered by Solana</span>
                 </div>
               </>

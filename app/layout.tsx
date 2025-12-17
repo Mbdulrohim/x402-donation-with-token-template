@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Chelsea_Market } from "next/font/google";
 import "./globals.css";
 
 import { Providers } from "@/components/providers";
@@ -8,6 +8,12 @@ import { Toaster } from "@/components/ui/sonner";
 
 const inter = Inter({
   variable: "--font-inter",
+  subsets: ["latin"],
+});
+
+const chelseaMarket = Chelsea_Market({
+  weight: "400",
+  variable: "--font-chelsea-market",
   subsets: ["latin"],
 });
 
@@ -64,7 +70,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.variable} antialiased`}>
+      <body
+        className={`${inter.variable} ${chelseaMarket.variable} antialiased`}
+      >
         <Providers>
           <div className="fixed right-4 top-4 z-50">
             <ThemeToggle />

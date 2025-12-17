@@ -40,7 +40,7 @@ export function DonationItem({
   };
 
   const isAnonymous = !donor_name;
-  const avatarColor = isAnonymous ? "#744AC9" : "#22EBAD";
+  const avatarColor = isAnonymous ? "#744AC9" : "#D42426"; // Red for non-anonymous
 
   return (
     <div
@@ -119,10 +119,7 @@ export function DonationItem({
           <span
             className="font-semibold"
             style={{
-              color:
-                theme === "dark"
-                  ? "rgba(34, 191, 145, 1)"
-                  : "rgba(22, 163, 74, 1)",
+              color: "#F8B229", // Gold
             }}
           >
             ${amount_usd} USDC

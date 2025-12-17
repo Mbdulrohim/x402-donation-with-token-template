@@ -128,15 +128,39 @@ function WalletSelectionOverlay({
       setPendingWallet(walletName);
       setError(null);
       await select(walletName);
-      await connect();
-      onClose();
+      // Connection will be handled by the useEffect below once the wallet is selected
     } catch (err) {
       const message = err instanceof Error ? err.message : "Connection failed";
       setError(message);
-    } finally {
       setPendingWallet(null);
     }
   };
+
+  // Handle connection after wallet selection
+  useEffect(() => {
+    const connectWallet = async () => {
+      if (
+        pendingWallet &&
+        wallet &&
+        wallet.adapter.name === pendingWallet &&
+        !connected &&
+        !connecting
+      ) {
+        try {
+          await connect();
+          onClose(); // Only close on successful connection request
+        } catch (err) {
+          const message =
+            err instanceof Error ? err.message : "Connection failed";
+          setError(message);
+        } finally {
+          setPendingWallet(null);
+        }
+      }
+    };
+
+    connectWallet();
+  }, [wallet, pendingWallet, connected, connecting, connect, onClose]);
 
   // Close on Escape key — always register the effect so hooks order is stable
   useEffect(() => {
