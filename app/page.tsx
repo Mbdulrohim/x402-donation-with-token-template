@@ -23,6 +23,8 @@ import { DonationSuccess } from "@/components/donation-success";
 import { ScrollIndicator } from "@/components/ScrollIndicator";
 import { ChristmasDivider } from "@/components/christmas-divider";
 import { toast } from "sonner";
+import { motion } from "framer-motion";
+import { useCountUp } from "@/hooks/use-count-up";
 
 interface DonationMessage {
   id: number;
@@ -83,6 +85,11 @@ export default function Home() {
     null
   );
   const [usdcBalance, setUsdcBalance] = useState<number>(0);
+
+  // Animated counts for stats
+  const animatedDonations = useCountUp(stats.totalDonations, 1000);
+  const animatedAmount = useCountUp(stats.totalAmount, 1000);
+  const animatedTokens = useCountUp(stats.totalTokens, 1000);
 
   const [customAmount, setCustomAmount] = useState("0");
   const [donorName, setDonorName] = useState("");
@@ -300,10 +307,7 @@ export default function Home() {
                         }}
                       />
                     </div>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src="/ImageRing.png"
-                      alt="Decorative Ring"
+                    <div
                       className="absolute pointer-events-none"
                       style={{
                         top: "50%",
@@ -312,7 +316,23 @@ export default function Home() {
                         width: "100%",
                         height: "100%",
                       }}
-                    />
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <motion.img
+                        animate={{ rotate: 360 }}
+                        transition={{
+                          duration: 20,
+                          repeat: Infinity,
+                          ease: "linear",
+                        }}
+                        src="/ImageRing.png"
+                        alt="Decorative Ring"
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                        }}
+                      />
+                    </div>
                   </div>
                 )}
                 <div>
@@ -403,7 +423,16 @@ export default function Home() {
               />
               {/* Ice Left */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <motion.img
+                animate={{
+                  y: [0, -5, 0],
+                  rotate: [0, -2, 0],
+                }}
+                transition={{
+                  duration: 4,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                }}
                 src="/Ice-left.png"
                 alt="Ice decoration"
                 style={{
@@ -418,7 +447,17 @@ export default function Home() {
               />
               {/* Ice Right */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <motion.img
+                animate={{
+                  y: [0, -5, 0],
+                  rotate: [0, 2, 0],
+                }}
+                transition={{
+                  duration: 4,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                  delay: 0.5,
+                }}
                 src="/Ice-right.png"
                 alt="Ice decoration"
                 style={{
@@ -459,7 +498,7 @@ export default function Home() {
                       color: theme === "dark" ? "#FFFFFF" : "#09090B",
                     }}
                   >
-                    {stats.totalDonations}
+                    {Math.floor(animatedDonations)}
                   </div>
                   <div
                     style={{
@@ -502,7 +541,7 @@ export default function Home() {
                       color: theme === "dark" ? "#FFFFFF" : "#09090B",
                     }}
                   >
-                    ${stats.totalAmount.toFixed(2)} / ${donationTarget}
+                    ${animatedAmount.toFixed(2)} / ${donationTarget}
                   </div>
                   <div
                     style={{
@@ -516,12 +555,16 @@ export default function Home() {
                       overflow: "hidden",
                     }}
                   >
-                    <div
-                      style={{
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{
                         width: `${Math.min(
-                          (stats.totalAmount / donationTarget) * 100,
+                          (animatedAmount / donationTarget) * 100,
                           100
                         )}%`,
+                      }}
+                      transition={{ duration: 1, ease: "easeOut" }}
+                      style={{
                         height: "100%",
                         backgroundColor: "#D42426",
                       }}
@@ -568,7 +611,7 @@ export default function Home() {
                       color: theme === "dark" ? "#FFFFFF" : "#09090B",
                     }}
                   >
-                    {stats.totalTokens.toLocaleString()} /{" "}
+                    {Math.floor(animatedTokens).toLocaleString()} /{" "}
                     {mintableSupply.toLocaleString()}
                   </div>
                   <div
@@ -583,12 +626,16 @@ export default function Home() {
                       overflow: "hidden",
                     }}
                   >
-                    <div
-                      style={{
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{
                         width: `${Math.min(
-                          (stats.totalTokens / mintableSupply) * 100,
+                          (animatedTokens / mintableSupply) * 100,
                           100
                         )}%`,
+                      }}
+                      transition={{ duration: 1, ease: "easeOut" }}
+                      style={{
                         height: "100%",
                         backgroundColor: "#F8B229",
                       }}
@@ -614,7 +661,9 @@ export default function Home() {
                     }}
                   >
                     Remaining:{" "}
-                    {(mintableSupply - stats.totalTokens).toLocaleString()}
+                    {(
+                      mintableSupply - Math.floor(animatedTokens)
+                    ).toLocaleString()}
                   </div>
                 </div>
 
@@ -789,7 +838,16 @@ export default function Home() {
               >
                 {/* Ice Left */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <motion.img
+                  animate={{
+                    y: [0, -5, 0],
+                    rotate: [0, -2, 0],
+                  }}
+                  transition={{
+                    duration: 4,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                  }}
                   src="/Ice-left.png"
                   alt="Ice decoration"
                   style={{
@@ -798,13 +856,23 @@ export default function Home() {
                     height: "60.14px",
                     left: "-3px",
                     top: "-7px",
-                    zIndex: 1,
+                    pointerEvents: "none",
+                    zIndex: 3,
                   }}
                 />
-
                 {/* Ice Right */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <motion.img
+                  animate={{
+                    y: [0, -5, 0],
+                    rotate: [0, 2, 0],
+                  }}
+                  transition={{
+                    duration: 4,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                    delay: 0.5,
+                  }}
                   src="/Ice-right.png"
                   alt="Ice decoration"
                   style={{
@@ -813,8 +881,8 @@ export default function Home() {
                     height: "60.14px",
                     right: "-3px",
                     top: "-7px",
-                    transform: "rotate(360deg)",
-                    zIndex: 2,
+                    pointerEvents: "none",
+                    zIndex: 3,
                   }}
                 />
                 <CardContent

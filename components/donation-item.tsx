@@ -1,5 +1,7 @@
 "use client";
 
+import { motion } from "framer-motion";
+
 interface DonationItemProps {
   id: number;
   donor_address: string;
@@ -43,7 +45,14 @@ export function DonationItem({
   const avatarColor = isAnonymous ? "#744AC9" : "#D42426"; // Red for non-anonymous
 
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, ease: "easeOut" }}
+      whileHover={{
+        y: -2,
+        transition: { duration: 0.2 },
+      }}
       className="py-4 border-b last:border-b-0"
       style={{
         borderColor:
@@ -154,6 +163,6 @@ export function DonationItem({
           </a>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }
